@@ -38,6 +38,25 @@ function persist(){
   scheduleSyncPush();
 }
 
+// نفس الحفظ، بس بدون فترة انتظار — نستخدمها لحظة بدء/إيقاف العداد تحديداً حتى تنعرض عند العائلة فوراً وهي تعد
+async function persistImmediate(){
+  saveData(DATA);
+  const cfg = getEffectiveFirebaseConfig();
+  if(!cfg) return;
+  syncState = 'pending';
+  renderSyncStatusUI();
+  try{
+    await pushRemoteData(cfg, DATA);
+    syncState = 'ok';
+    lastSyncError = '';
+  }catch(e){
+    console.error('sync error:', e);
+    syncState = 'err';
+    lastSyncError = e.message || String(e);
+  }
+  renderSyncStatusUI();
+}
+
 const scheduleSyncPush = debounce(async function(){
   const cfg = getEffectiveFirebaseConfig();
   if(!cfg) return;
@@ -259,7 +278,7 @@ function updateRunningTimerDisplay(){
 function startTimer(catKey){
   if(DATA.activeTimer){ toast('فيه عداد شغال حالياً، خلّص منه أول', 'error'); return; }
   DATA.activeTimer = { category: catKey, start: new Date().toISOString() };
-  persist();
+  persistImmediate();
   renderAll();
   startTickInterval();
 }
@@ -275,7 +294,7 @@ function stopTimer(catKey){
   const session = { id: uid(), start, end, minutes, details: '', source: 'timer' };
   day[cat.arrayKey].push(session);
   DATA.activeTimer = null;
-  persist();
+  persistImmediate();
   stopTickInterval();
   renderAll();
   toast(cat.addedToast, 'success');
@@ -287,7 +306,7 @@ function cancelTimer(catKey){
   if(!DATA.activeTimer || DATA.activeTimer.category !== catKey) return;
   if(!confirm('تريد تلغي هذا العداد بدون ما تحفظ الجلسة؟')) return;
   DATA.activeTimer = null;
-  persist();
+  persistImmediate();
   stopTickInterval();
   renderAll();
   toast('تم الإلغاء بدون حفظ', 'info');
