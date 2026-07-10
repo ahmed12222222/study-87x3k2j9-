@@ -218,6 +218,8 @@ function setStatsLoading(isLoading){
   });
 }
 
+let viewerTickInterval = null;
+
 function renderViewerAll(){
   setStatsLoading(false);
   renderViewerHeader();
@@ -227,7 +229,30 @@ function renderViewerAll(){
   renderViewerSessions('break');
   renderViewerSessions('sleep');
   renderViewerAchievements();
+  updateLiveTimerDisplay();
   if(currentDayModalKey) openViewerDayModal(currentDayModalKey);
+}
+
+function updateLiveTimerDisplay(){
+  const active = VDATA && VDATA.activeTimer;
+  ['study', 'break', 'sleep'].forEach(catKey => {
+    const box = document.getElementById(`livetimer-${catKey}`);
+    if(box) box.style.display = (active && active.category === catKey) ? 'flex' : 'none';
+  });
+  if(active){
+    if(!viewerTickInterval) viewerTickInterval = setInterval(tickLiveTimerDisplay, 1000);
+    tickLiveTimerDisplay();
+  } else if(viewerTickInterval){
+    clearInterval(viewerTickInterval);
+    viewerTickInterval = null;
+  }
+}
+
+function tickLiveTimerDisplay(){
+  const active = VDATA && VDATA.activeTimer;
+  if(!active) return;
+  const el = document.getElementById(`livetimer-${active.category}-clock`);
+  if(el) el.textContent = formatStopwatch(getActiveElapsedSeconds(active));
 }
 
 /* -------------------- لوحة عرض الملاحظة -------------------- */
