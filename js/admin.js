@@ -85,21 +85,38 @@ async function testFirebaseConnection(){
   resultEl.innerHTML = `${ICONS[result.ok ? (result.warn ? 'alertCircle' : 'checkCircle') : 'alertCircle']}<span>${escapeHtml(result.message)}</span>`;
 }
 
+function showUpdateAvailableBanner(remoteData){
+  const existing = document.getElementById('remote-update-banner');
+  if(existing) existing.remove();
+  const banner = document.createElement('div');
+  banner.id = 'remote-update-banner';
+  banner.className = 'update-banner';
+  banner.innerHTML = `
+    <span class="update-banner-icon">${ICONS.info}</span>
+    <span class="update-banner-text">لكيت نسخة أحدث من بياناتك محفوظة (غالباً من جهاز ثاني)</span>
+    <button type="button" class="btn btn-primary btn-sm" id="update-banner-load">تحميلها</button>
+    <button type="button" class="btn btn-ghost btn-sm" id="update-banner-dismiss">تجاهل</button>
+  `;
+  document.body.appendChild(banner);
+  document.getElementById('update-banner-load').onclick = () => {
+    DATA = mergeWithDefaults(remoteData);
+    saveData(DATA);
+    applyTheme(DATA.settings);
+    renderAll();
+    renderBrandName();
+    toast('تم تحميل أحدث نسخة ✓', 'success');
+    banner.remove();
+  };
+  document.getElementById('update-banner-dismiss').onclick = () => banner.remove();
+}
+
 async function checkRemoteOnLoad(){
   const cfg = getEffectiveFirebaseConfig();
   if(!cfg){ renderSyncStatusUI(); return; }
   try{
     const remote = await fetchRemoteDataFresh(cfg);
     if(remote && remote.updatedAt && (!DATA.updatedAt || new Date(remote.updatedAt) > new Date(DATA.updatedAt))){
-      const proceed = confirm('لكيت نسخة أحدث من بياناتك محفوظة على Firebase (غالباً من جهاز ثاني). تريد تحميلها؟ (راح تستبدل بيانات هذا الجهاز الحالية)');
-      if(proceed){
-        DATA = mergeWithDefaults(remote);
-        saveData(DATA);
-        applyTheme(DATA.settings);
-        renderAll();
-        renderBrandName();
-        toast('تم تحميل أحدث نسخة من Firebase ✓', 'success');
-      }
+      showUpdateAvailableBanner(remote);
     }
     syncState = 'ok';
     lastSyncError = '';
@@ -787,6 +804,16 @@ function init(){
   });
   document.addEventListener('keydown', (e) => {
     if(e.key === 'Escape'){ document.querySelectorAll('.modal-overlay.show').forEach(ov => closeAnyModal(ov.id)); }
+  });
+
+  // متصفحات الموبايل أحياناً تجمّد الصفحة بالخلفية لفترة (توفير بطارية) — لما ترجع نشطة، نحدّث كل شي ونتأكد العداد
+  // مزبوط ومضبوط، حتى لو انعطلت المؤقّتات لفترة وإحنا بعيدين عن الصفحة
+  document.addEventListener('visibilitychange', () => {
+    if(document.visibilityState === 'visible'){
+      renderAll();
+      renderHeaderClock();
+      if(DATA.activeTimer) startTickInterval();
+    }
   });
 }
 
