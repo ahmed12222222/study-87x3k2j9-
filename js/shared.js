@@ -109,7 +109,7 @@ function defaultData(){
     },
     activeTimer: null,
     days: {},
-    updatedAt: new Date().toISOString(),
+    updatedAt: null, // null = بيانات افتراضية لسه ما انحفظت — يخلي فحص "نسخة أحدث بالسحابة" يشتغل صح بأول فتح لجهاز جديد
   };
 }
 
