@@ -151,10 +151,19 @@ async function checkRemoteOnLoad(){
 
 function mergeWithDefaults(obj){
   const base = defaultData();
+  const days = obj.days || {};
+  Object.keys(days).forEach(k => {
+    const d = days[k];
+    if(!d.study) d.study = [];
+    if(!d.breaks) d.breaks = [];
+    if(!d.sleep) d.sleep = [];
+    if(!d.achievements) d.achievements = [];
+    if(!d.familyFeedback) d.familyFeedback = [];
+  });
   return {
     ...base, ...obj,
     settings: { ...base.settings, ...(obj.settings||{}), customTheme: { ...base.settings.customTheme, ...((obj.settings||{}).customTheme||{}) } },
-    days: obj.days || {},
+    days,
   };
 }
 
