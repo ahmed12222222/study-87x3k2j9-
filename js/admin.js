@@ -680,7 +680,7 @@ function renderSyncSettingsUI(){
 
 async function loadFromCloudNow(){
   const cfg = getEffectiveFirebaseConfig();
-  if(!cfg){ toast('ما لكينا إعدادات Firebase بالملف', 'error'); return; }
+  if(!cfg){ toast('ما لكينا إعدادات Firebase بالملف — شوف تبويب المشاركة', 'error'); return; }
   try{
     const remote = await fetchRemoteDataFresh(cfg);
     if(!remote){ toast('ما اكو بيانات محفوظة على السحابة بعد', 'info'); return; }
@@ -694,8 +694,11 @@ async function loadFromCloudNow(){
     toast('تم تحميل البيانات من السحابة ✓', 'success');
   }catch(e){
     console.error(e);
-    if(e.message === 'NOT_FOUND') toast('ما اكو بيانات محفوظة على السحابة بعد', 'info');
-    else toast('فشل التحميل — تأكد من الاتصال وحاول مرة ثانية', 'error');
+    const msg = String(e && e.message || e);
+    if(msg === 'NOT_FOUND'){ toast('ما اكو بيانات محفوظة على السحابة بعد', 'info'); }
+    else if(msg === 'BRIDGE_NOT_READY'){ toast('مكتبة Firebase ما حمّلت بعد — انتظر ثانيتين وحاول مرة ثانية', 'error'); }
+    else if(msg === 'INIT_FAILED'){ toast('إعدادات Firebase بالملف غير صحيحة الصيغة', 'error'); }
+    else { toast(`فشل التحميل: ${msg}`, 'error'); }
   }
 }
 
