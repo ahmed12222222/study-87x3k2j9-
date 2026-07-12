@@ -359,7 +359,7 @@ function renderTrackerSection(catKey){
   const cat = CATS[catKey];
   const isDay = currentPeriod === 'day';
   const periodWord = { day: 'اليوم', week: 'هالأسبوع', month: 'هالشهر' }[currentPeriod];
-  const sessions = getScopedView()[cat.arrayKey];
+  const sessions = getScopedView()[cat.arrayKey] || [];
   const totalMin = sessions.reduce((s,x)=>s+x.minutes, 0);
 
   const totalEl = document.getElementById(`total-${catKey}`);
