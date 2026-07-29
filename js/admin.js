@@ -151,14 +151,22 @@ async function checkRemoteOnLoad(){
 
 function mergeWithDefaults(obj){
   const base = defaultData();
+  const days = obj.days || {};
+  Object.keys(days).forEach(k => {
+    const d = days[k];
+    if(!d.study) d.study = [];
+    if(!d.breaks) d.breaks = [];
+    if(!d.sleep) d.sleep = [];
+    if(!d.achievements) d.achievements = [];
+    if(!d.familyFeedback) d.familyFeedback = [];
+  });
   return {
     ...base, ...obj,
-    settings: migrateGoalTiers({ ...base.settings, ...(obj.settings||{}), customTheme: { ...base.settings.customTheme, ...((obj.settings||{}).customTheme||{}) } }, obj.settings),
-    days: obj.days || {},
+    settings: { ...base.settings, ...(obj.settings||{}), customTheme: { ...base.settings.customTheme, ...((obj.settings||{}).customTheme||{}) } },
+    days,
     review: { subjects: (obj.review && obj.review.subjects) || [], items: (obj.review && obj.review.items) || [] },
   };
 }
-
 function renderSyncStatusUI(){
   const cfg = getEffectiveFirebaseConfig();
   const dot = document.getElementById('sync-dot');
@@ -370,7 +378,7 @@ function renderTrackerSection(catKey){
   const cat = CATS[catKey];
   const isDay = currentPeriod === 'day';
   const periodWord = { day: 'اليوم', week: 'هالأسبوع', month: 'هالشهر' }[currentPeriod];
-  const sessions = getScopedView()[cat.arrayKey];
+  const sessions = getScopedView()[cat.arrayKey] || [];
   const totalMin = sessions.reduce((s,x)=>s+x.minutes, 0);
 
   const totalEl = document.getElementById(`total-${catKey}`);
