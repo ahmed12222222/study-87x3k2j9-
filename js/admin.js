@@ -119,14 +119,19 @@ function showUpdateAvailableBanner(remoteData){
   `;
   document.body.appendChild(banner);
   document.getElementById('update-banner-load').onclick = () => {
-    DATA = mergeWithDefaults(remoteData);
-    saveData(DATA);
-    applyTheme(DATA.settings);
-    renderAll();
-    renderBrandName();
-    renderGoalTiersInputs();
-    toast('تم تحميل أحدث نسخة ✓', 'success');
-    banner.remove();
+    try{
+      DATA = mergeWithDefaults(remoteData);
+      saveData(DATA);
+      applyTheme(DATA.settings);
+      renderAll();
+      renderBrandName();
+      renderGoalTiersInputs();
+      toast('تم تحميل أحدث نسخة ✓', 'success');
+      banner.remove();
+    }catch(err){
+      console.error('update-banner-load:', err);
+      toast('صار خطأ وأنت تحمّل النسخة الجديدة — الرجا تحدّث الصفحة وحاول مرة ثانية', 'error');
+    }
   };
   document.getElementById('update-banner-dismiss').onclick = () => banner.remove();
 }
@@ -581,8 +586,7 @@ function renderTrackerSection(catKey){
 function deleteSession(catKey, sessionId, dayKey){
   if(!confirm('تحذف هذي الجلسة؟')) return;
   const cat = CATS[catKey];
-  const day = DATA.days[dayKey || currentDayKey];
-  if(!day) return;
+  const day = ensureDay(DATA, dayKey || currentDayKey);
   day[cat.arrayKey] = day[cat.arrayKey].filter(s => s.id !== sessionId);
   persist();
   renderAll();
@@ -598,8 +602,7 @@ function toTimeInputValue(dateLike){
 function openDetailsModal(catKey, sessionId, dayKey){
   dayKey = dayKey || currentDayKey;
   const cat = CATS[catKey];
-  const day = DATA.days[dayKey];
-  if(!day) return;
+  const day = ensureDay(DATA, dayKey);
   const session = day[cat.arrayKey].find(s => s.id === sessionId);
   if(!session) return;
   currentModalSession = { catKey, sessionId, dayKey };
@@ -616,8 +619,7 @@ function saveDetailsModal(){
   if(!currentModalSession) return;
   const { catKey, sessionId, dayKey } = currentModalSession;
   const cat = CATS[catKey];
-  const day = DATA.days[dayKey || currentDayKey];
-  if(!day) return;
+  const day = ensureDay(DATA, dayKey || currentDayKey);
   const session = day[cat.arrayKey].find(s => s.id === sessionId);
   if(!session) return;
 
@@ -725,8 +727,7 @@ function addAchievement(){
 
 function toggleAchievement(id, dayKey){
   dayKey = dayKey || currentDayKey;
-  const day = DATA.days[dayKey];
-  if(!day) return;
+  const day = ensureDay(DATA, dayKey);
   const a = day.achievements.find(x => x.id === id);
   if(!a) return;
   a.done = !a.done;
@@ -742,8 +743,7 @@ function toggleAchievement(id, dayKey){
 
 function deleteAchievement(id, dayKey){
   dayKey = dayKey || currentDayKey;
-  const day = DATA.days[dayKey];
-  if(!day) return;
+  const day = ensureDay(DATA, dayKey);
   day.achievements = day.achievements.filter(x => x.id !== id);
   persist();
   renderAchievements();

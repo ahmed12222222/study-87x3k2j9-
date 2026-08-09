@@ -168,7 +168,15 @@ function saveData(data){
 function ensureDay(data, key){
   key = key || todayKey();
   if(!data.days[key]) data.days[key] = { study: [], breaks: [], sleep: [], achievements: [] };
-  else if(!data.days[key].sleep) data.days[key].sleep = []; // ترقية تلقائية لأيام قديمة قبل إضافة تتبع النوم
+  else {
+    // ترقيع دفاعي: Firebase يحذف المصفوفات الفارغة تلقائياً وقت الحفظ (سلوك معروف بقاعدة بياناته) —
+    // فيوم فيه صفر جلسات بفئة معينة يرجع من السحابة بدون هذا الحقل أصلاً، مو بمصفوفة فارغة []. لازم نعيد بنائه هنا قبل لا أي كود ثاني يحاول يستعمله.
+    const day = data.days[key];
+    if(!Array.isArray(day.study)) day.study = [];
+    if(!Array.isArray(day.breaks)) day.breaks = [];
+    if(!Array.isArray(day.sleep)) day.sleep = [];
+    if(!Array.isArray(day.achievements)) day.achievements = [];
+  }
   return data.days[key];
 }
 

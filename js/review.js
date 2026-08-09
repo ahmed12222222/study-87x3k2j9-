@@ -309,8 +309,10 @@ function renderAllTopics(){
   const examOnlyItems = review.items.filter(item => !item.schedule);
 
   const byNameThenDate = (a, b) => {
-    const an = (a.subjectIds[0] && getSubjectById(a.subjectIds[0]) && getSubjectById(a.subjectIds[0]).name) || 'ي';
-    const bn = (b.subjectIds[0] && getSubjectById(b.subjectIds[0]) && getSubjectById(b.subjectIds[0]).name) || 'ي';
+    const aid = (a.subjectIds || [])[0];
+    const bid = (b.subjectIds || [])[0];
+    const an = (aid && getSubjectById(aid) && getSubjectById(aid).name) || 'ي';
+    const bn = (bid && getSubjectById(bid) && getSubjectById(bid).name) || 'ي';
     return an.localeCompare(bn, 'ar');
   };
 

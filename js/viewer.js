@@ -266,7 +266,7 @@ function showNoteModal(catKey, sessionId, dayKey){
   const session = (dayObj[cat.arrayKey] || []).find(s => s.id === sessionId);
   if(!session) return;
   document.getElementById('modal-note-title').textContent = cat.label;
-  document.getElementById('modal-note-meta').textContent = `${formatTime(session.start)} – ${formatTime(session.end)} · ${formatDuration(session.minutes)}`;
+  document.getElementById('modal-note-meta').textContent = `من ${formatTime(session.start)} إلى ${formatTime(session.end)} · ${formatDuration(session.minutes)}`;
   document.getElementById('modal-note-text').textContent = session.details || '';
   showModal('modal-note');
 }
