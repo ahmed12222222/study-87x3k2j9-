@@ -68,17 +68,17 @@
     <section class="stats-grid reveal" style="animation-delay:.05s">
       <div class="stat-card">
         <div class="stat-top"><span class="stat-icon tint-primary" data-icon="book"></span></div>
-        <span class="stat-value num" id="stat-study">0 د</span>
+        <span class="stat-value num-inline" id="stat-study">0 د</span>
         <span class="stat-label">قراءة اليوم</span>
       </div>
       <div class="stat-card">
         <div class="stat-top"><span class="stat-icon tint-secondary" data-icon="coffee"></span></div>
-        <span class="stat-value num" id="stat-break">0 د</span>
+        <span class="stat-value num-inline" id="stat-break">0 د</span>
         <span class="stat-label">استراحة اليوم</span>
       </div>
       <div class="stat-card">
         <div class="stat-top"><span class="stat-icon tint-success" data-icon="bed"></span></div>
-        <span class="stat-value num" id="stat-sleep">0 د</span>
+        <span class="stat-value num-inline" id="stat-sleep">0 د</span>
         <span class="stat-label">نوم اليوم</span>
       </div>
       <div class="stat-card">
@@ -278,16 +278,18 @@
 
 <script>
   // ⚙️ إعداد Firebase — لازم يكون نفس القيمة بالضبط الموجودة بملف admin.html (خطوات كاملة بالـ README).
+  window.INJAZ_FIREBASE_CONFIG = null;
+  /* مثال:
   window.INJAZ_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCb1GU-Vyn5WoRQf0Ad91ebKOLlDCyUG8I",
-  authDomain: "injaz-78e0d.firebaseapp.com",
-  databaseURL: "https://injaz-78e0d-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "injaz-78e0d",
-  storageBucket: "injaz-78e0d.firebasestorage.app",
-  messagingSenderId: "638503212154",
-  appId: "1:638503212154:web:49880a39c447c9120857c3",
-  measurementId: "G-WQ6MM13KWH"
-};
+    apiKey: "AIzaSy...",
+    authDomain: "my-project.firebaseapp.com",
+    databaseURL: "https://my-project-default-rtdb.firebaseio.com",
+    projectId: "my-project",
+    storageBucket: "my-project.appspot.com",
+    messagingSenderId: "1234567890",
+    appId: "1:1234567890:web:abcdef"
+  };
+  */
 </script>
 <script type="module" src="js/firebase-bridge.js"></script>
 <script src="js/icons.js"></script>
