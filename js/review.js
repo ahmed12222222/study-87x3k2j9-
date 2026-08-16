@@ -554,7 +554,7 @@ function renderQuizStep(){
     ${q.image ? `<img class="quiz-question-image" src="${q.image}" alt="صورة السؤال">` : ''}
     ${q.htmlFile ? `<div class="quiz-question-html-wrap">
       <button type="button" class="quiz-html-expand-btn" title="توسيع لحجم الشاشة" onclick="expandQuizHtml()"><span data-icon="eye"></span></button>
-      <iframe class="quiz-question-html" id="quiz-question-html-frame" sandbox="allow-same-origin" title="محتوى السؤال"></iframe>
+      <iframe class="quiz-question-html" id="quiz-question-html-frame" sandbox="allow-scripts" title="محتوى السؤال"></iframe>
     </div>` : ''}
     ${q.question ? `<div class="quiz-question">${escapeHtml(q.question)}</div>` : (hasVisual ? '' : `<div class="quiz-question quiz-question-empty">(سؤال بدون نص)</div>`)}
     ${quizState.revealed ? `
