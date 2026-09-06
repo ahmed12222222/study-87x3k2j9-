@@ -294,13 +294,18 @@ async function initFirebaseSync() {
         }
     } catch (err) {
         console.error('فشل الاتصال بـ Firebase (Focus Tracker يشتغل محلياً بس):', err);
-        setSyncStatus('⚠️ تعذّر الاتصال بالسحابة — محفوظ بجهازك بس', false);
+        const reason = (err && (err.code || err.message)) ? String(err.code || err.message) : 'سبب غير معروف';
+        setSyncStatus(`⚠️ تعذّر الاتصال بالسحابة (${reason}) — محفوظ بجهازك بس`, false);
     }
 }
 
 if (typeof window !== 'undefined') {
     window.addEventListener('firebase-bridge-ready', initFirebaseSync);
-    setTimeout(() => { if (!firebaseSyncReady) setSyncStatus('📴 بلا اتصال سحابي — محفوظ بجهازك بس', null); }, 4000);
+    // إذا firebase-bridge.js ما وصل يشتغل إطلاقاً (حاجب إعلانات، أو الملف مو موجود بمساره) خلال ١٢ ثانية،
+    // نعتبرها ما راح توصل ونعرض حالة واضحة بدل ما تضل عالقة على "جاري الاتصال" للأبد.
+    setTimeout(() => {
+        if (!firebaseSyncReady) setSyncStatus('📴 بلا اتصال سحابي — محفوظ بجهازك بس (تأكد إن js/firebase-bridge.js موجود بمساره وإن Rule مسار focusTracker مضافة)', null);
+    }, 12000);
 }
 
 // كل حفظة تختم بوقتها (updatedAt) — هذا هو المرجع لمعرفة أي نسخة أحدث لمن نقارن بالسحابة،
