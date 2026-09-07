@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Focus Tracker — إنجاز</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%A5%3C/text%3E%3C/svg%3E">
+<link rel="stylesheet" href="css/focus-tracker.css">
+</head>
+<body>
+<div class="page">
+
+  <!-- الواجهة الرئيسية: بس اللوحة + صندوق البونسات (قراءة فقط) -->
+  <div id="dashboard"></div>
+  <div id="bonusReadonlyBox"></div>
+
+  <!-- زر بعيد وصغير يفتح كل أدوات التحكم -->
+  <button type="button" id="settingsTriggerBtn" class="settings-trigger" title="الإعدادات والتحكم" aria-label="الإعدادات والتحكم">⚙️</button>
+
+  <!-- نافذة الإعدادات والتحكم — هنا يصير كل تعديل، بعيد كلياً عن الواجهة الرئيسية -->
+  <div class="settings-modal-overlay" id="settingsModalOverlay">
+    <div class="settings-modal">
+      <div class="settings-modal-head">
+        <span>⚙️ الإعدادات والتحكم</span>
+        <button type="button" id="settingsCloseBtn" class="settings-close-btn" aria-label="إغلاق">✕</button>
+      </div>
+
+      <div class="settings-tabs">
+        <button type="button" class="settings-tab active" data-tab="entry">تسجيل نقاط</button>
+        <button type="button" class="settings-tab" data-tab="bonuses">البونسات</button>
+        <button type="button" class="settings-tab" data-tab="ranks">الرتب</button>
+        <button type="button" class="settings-tab" data-tab="data">البيانات</button>
+      </div>
+
+      <div class="settings-body">
+
+        <!-- تسجيل نقاط -->
+        <div class="settings-pane active" data-pane="entry">
+          <div class="qa-title">➕ تسجيل نقاط</div>
+          <form id="entryForm">
+            <div class="qa-row">
+              <div class="qa-field">
+                <label for="qaPoints">النقاط</label>
+                <input type="number" id="qaPoints" min="1" step="1" required>
+              </div>
+              <div class="qa-field qa-field-grow">
+                <label for="qaSubject">المادة (اختياري)</label>
+                <input type="text" id="qaSubject" list="subjectList" placeholder="مثلاً: فيزياء" autocomplete="off">
+                <datalist id="subjectList"></datalist>
+              </div>
+            </div>
+            <div class="qa-row">
+              <div class="qa-field qa-field-grow">
+                <label for="qaDate">التاريخ</label>
+                <input type="date" id="qaDate" required>
+              </div>
+              <button type="submit" class="qa-btn qa-btn-primary" style="align-self:flex-end;">إضافة</button>
+            </div>
+          </form>
+          <button type="button" id="restDayBtn" class="qa-btn qa-btn-secondary qa-btn-full">☕ سجّل التاريخ فوك كيوم إجازة استراتيجية</button>
+
+          <details class="settings-subsection">
+            <summary>📋 سجل الإدخالات</summary>
+            <div id="logList" class="log-list"></div>
+          </details>
+        </div>
+
+        <!-- البونسات -->
+        <div class="settings-pane" data-pane="bonuses">
+          <div class="bonus-header">
+            <div class="qa-title" style="margin-bottom:0;">🏅 البونسات</div>
+            <button type="button" id="newBonusBtn" class="qa-btn qa-btn-secondary">➕ بونس جديد</button>
+          </div>
+          <div class="bonus-new-form" id="bonusNewForm" style="display:none;">
+            <div class="qa-field" style="margin-bottom:10px;">
+              <label for="bonusNameInput">اسم البونس</label>
+              <input type="text" id="bonusNameInput" placeholder="مثلاً: حفظ القرآن" autocomplete="off">
+            </div>
+            <label class="form-hint" style="display:block;margin-bottom:4px;">مراحل البونس — عنوان أي مرحلة براحتك تماماً</label>
+            <div class="qa-row">
+              <input type="text" id="newStageLabelInput" placeholder="مثلاً: 1.1" style="flex:1;">
+              <button type="button" id="addStageBtn" class="qa-btn qa-btn-secondary">➕ إضافة مرحلة</button>
+            </div>
+            <div id="newBonusStagesList" class="stage-chip-list"></div>
+            <label class="bonus-affects-label">
+              <input type="checkbox" id="bonusAffectsPoints">
+              <span>⚡ يضرب نقاط اليوم — إذا فعّلتها، عنوان كل مرحلة نفسه هو رقم المضاعف (مثلاً اكتب "1.5" أو "2")، يتصفر تلقائياً كل يوم جديد</span>
+            </label>
+            <button type="button" id="bonusCreateBtn" class="qa-btn qa-btn-primary qa-btn-full">إنشاء</button>
+          </div>
+          <div id="bonusList" class="bonus-list"></div>
+        </div>
+
+        <!-- الرتب -->
+        <div class="settings-pane" data-pane="ranks">
+          <div class="qa-title">🏆 عتبات رتب الأسبوع</div>
+          <span class="form-hint">عدّل بس الرقم (عدد النقاط المطلوب) — الأيقونة واللون والرسالة التحفيزية ما تتغير.</span>
+          <div id="rankEditorWeek" class="rank-edit-list"></div>
+
+          <div class="qa-title" style="margin-top:16px;">📅 عتبات رتب الشهر</div>
+          <div id="rankEditorMonth" class="rank-edit-list"></div>
+
+          <div class="qa-row" style="margin-top:12px;">
+            <button type="button" id="saveRanksBtn" class="qa-btn qa-btn-primary">💾 حفظ العتبات</button>
+            <button type="button" id="resetRanksBtn" class="qa-btn qa-btn-secondary">↺ رجوع للافتراضي</button>
+          </div>
+        </div>
+
+        <!-- البيانات -->
+        <div class="settings-pane" data-pane="data">
+          <div class="qa-title">⚙️ إدارة البيانات</div>
+          <div id="syncStatus" class="sync-status">📴 بلا اتصال سحابي — محفوظ بجهازك بس</div>
+          <div class="data-actions">
+            <button type="button" id="exportBtn" class="qa-btn qa-btn-secondary">⬇️ تصدير نسخة احتياطية</button>
+            <label class="qa-btn qa-btn-secondary" for="importInput">⬆️ استيراد نسخة احتياطية</label>
+            <input type="file" id="importInput" accept="application/json" style="display:none;">
+            <button type="button" id="clearAllBtn" class="qa-btn qa-btn-danger">🗑️ مسح كل البيانات</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+<script>
+  // ⚙️ نفس إعداد Firebase الموجود بالضبط بـ admin.html و index.html — هذا مو ملف جديد،
+  // هذا الصفحة تستخدم نفس js/firebase-bridge.js الموجود عندك أصلاً بالمشروع.
+  // تكتب/تقرأ بمسار "focusTracker" فقط — منفصل كلياً عن مسار "injaz"، ما يقدر يلمسه أو يأثر عليه بأي شكل.
+  window.INJAZ_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCb1GU-Vyn5WoRQf0Ad91ebKOLlDCyUG8I",
+  authDomain: "injaz-78e0d.firebaseapp.com",
+  databaseURL: "https://injaz-78e0d-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "injaz-78e0d",
+  storageBucket: "injaz-78e0d.firebasestorage.app",
+  messagingSenderId: "638503212154",
+  appId: "1:638503212154:web:49880a39c447c9120857c3",
+  measurementId: "G-WQ6MM13KWH"
+};
+</script>
+<script type="module" src="js/firebase-bridge.js"></script>
+<script src="js/focus-tracker.js"></script>
+</body>
+</html>
