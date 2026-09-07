@@ -1,15 +1,16 @@
 /* ============================================================
-   Focus Tracker — شارة الرتبة (قراءة فقط)
+   Focus Tracker — شارة الرتبة + تأثيرات الصفحة (قراءة فقط)
    تنحط بـ admin.html و index.html. تقرأ بس من مسار focusTracker بقاعدة
-   بيانات Firebase (قراءة عامة، بدون تسجيل دخول — زي لوحة المشاهدة بالضبط)
-   وتبني شارة صغيرة تتلون وتتوهج حسب الرتبة الحالية. ما تكتب ولا تعدل أي شي.
+   بيانات Firebase (قراءة عامة، بدون تسجيل دخول — زي لوحة المشاهدة بالضبط).
+   ما تكتب ولا تعدل أي شي بالبيانات، وما تلمس أي HTML موجود عندك —
+   بس تضيف: (١) لون/توهج داخل الشارة نفسها، (٢) توهج على شريط .topbar،
+   (٣) عند CHAMPION أو THE MACHINE بس: طبقة تأثير فوق كامل الصفحة (نار / تشويش).
 
    الاستخدام: بعد ما تحمّل js/firebase-bridge.js وتعرّف window.INJAZ_FIREBASE_CONFIG
    (نفس الموجودين أصلاً بصفحاتك)، ضيف بعدهم:
      <script src="js/focus-tracker-badge.js"></script>
    وحط بأي مكان تريد الشارة تطلع فيه:
      <span id="اسم-اللي-تختاره" data-ft-badge></span>
-   الشارة تلقى نفسها تلقائياً وتملأ نفسها أول ما يجهز الاتصال.
    ============================================================ */
 (function () {
     const FIREBASE_PATH = 'focusTracker';
@@ -46,7 +47,6 @@
         return RANKS.map((r, i) => ({ ...r, min: (typeof thresholds[i] === 'number') ? thresholds[i] : r.min }));
     }
 
-    // نفس صيغة bonusStageMultiplier بالضبط: رقم المرحلة الحالية نفسه هو المضاعف
     function todaysMultiplier(bonuses) {
         const scoring = (bonuses || []).filter(b => b.affectsPoints);
         if (scoring.length === 0) return 1;
@@ -73,19 +73,17 @@
         return total;
     }
 
+    // idx: 0=UNREAL ... 7=BRONZE، isMachine=true يتخطى الكل. يرجّع أيضاً اسم "طبقة" موحّد
+    // نستخدمه بثلاثتهم: الشارة، الشريط، وغطاء الصفحة.
     function getRankInfo(weekTotal, thresholds) {
-        if (weekTotal >= MAX_WEEK * 1.5) return { rank: MACHINE_RANK, idx: -1, isMachine: true };
+        if (weekTotal >= MAX_WEEK * 1.5) return { rank: MACHINE_RANK, idx: -1, isMachine: true, tier: 'machine' };
         const ranks = effectiveRanks(thresholds);
         const idx = ranks.findIndex(r => weekTotal >= r.min);
-        return { rank: ranks[idx], idx, isMachine: false };
-    }
-
-    function tierClass(idx, isMachine) {
-        if (isMachine) return 'ftbadge-machine';
-        if (idx === 0) return 'ftbadge-unreal';
-        if (idx === 1) return 'ftbadge-champion';
-        if (idx >= 2 && idx <= 5) return 'ftbadge-neon';
-        return 'ftbadge-plain';
+        let tier = 'plain';
+        if (idx === 0) tier = 'unreal';
+        else if (idx === 1) tier = 'champion';
+        else if (idx >= 2 && idx <= 5) tier = 'neon';
+        return { rank: ranks[idx], idx, isMachine: false, tier };
     }
 
     function injectStyles() {
@@ -93,36 +91,98 @@
         const style = document.createElement('style');
         style.id = 'ftbadge-styles';
         style.textContent = `
-.ftbadge{display:inline-flex;align-items:center;justify-content:center;width:1.6em;height:1.6em;border-radius:50%;font-size:1.1em;line-height:1;transition:box-shadow .4s ease,transform .3s ease;}
-.ftbadge-plain{filter:grayscale(.15);}
-.ftbadge-neon{box-shadow:0 0 8px var(--ftbadge-color,#0BF);animation:ftbadgePulse 2.6s ease-in-out infinite;}
-.ftbadge-champion{box-shadow:0 0 12px var(--ftbadge-color,#FF6B00);animation:ftbadgePulse 1.8s ease-in-out infinite;}
-.ftbadge-unreal{box-shadow:0 0 16px var(--ftbadge-color,#FFD700);animation:ftbadgePulse 1.4s ease-in-out infinite;}
-.ftbadge-machine{box-shadow:0 0 18px var(--ftbadge-color,#00FF41);animation:ftbadgePulseFast 0.9s ease-in-out infinite;}
-@keyframes ftbadgePulse{0%,100%{transform:scale(1);}50%{transform:scale(1.08);}}
-@keyframes ftbadgePulseFast{0%,100%{transform:scale(1);}50%{transform:scale(1.14);}}
-@media (prefers-reduced-motion: reduce){.ftbadge{animation:none !important;}}
+/* الشارة نفسها — تحجم طبيعي متل أي إيموجي بالنص، بدون صندوق مفروض يكسر صف الأيقونات */
+.ftbadge{display:inline-block;line-height:1;vertical-align:middle;transition:filter .4s ease, transform .3s ease;}
+.ftbadge-plain{filter:grayscale(.2) brightness(.9);}
+.ftbadge-neon{filter:drop-shadow(0 0 3px var(--ftbadge-color));animation:ftbadgePulse 2.6s ease-in-out infinite;}
+.ftbadge-champion{filter:drop-shadow(0 0 5px var(--ftbadge-color));animation:ftbadgePulse 1.8s ease-in-out infinite;}
+.ftbadge-unreal{filter:drop-shadow(0 0 6px var(--ftbadge-color));animation:ftbadgePulse 1.4s ease-in-out infinite;}
+.ftbadge-machine{filter:drop-shadow(0 0 6px var(--ftbadge-color));animation:ftbadgePulseFast .9s ease-in-out infinite;}
+@keyframes ftbadgePulse{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}
+@keyframes ftbadgePulseFast{0%,100%{transform:scale(1);}50%{transform:scale(1.2);}}
+
+/* توهج على .topbar كامل — إضافة فوق تصميمك الموجود، ما تبدله */
+.topbar{transition:box-shadow .6s ease, border-color .6s ease;}
+.ft-topbar-neon{box-shadow:0 0 0 1px rgba(0,191,255,.25) inset, 0 0 22px rgba(0,191,255,.22);}
+.ft-topbar-champion{box-shadow:0 0 0 1px rgba(255,107,0,.35) inset, 0 0 30px rgba(255,90,0,.35);}
+.ft-topbar-unreal{box-shadow:0 0 0 1px rgba(255,215,0,.4) inset, 0 0 34px rgba(255,215,0,.4);}
+.ft-topbar-machine{box-shadow:0 0 0 1px rgba(0,255,65,.4) inset, 0 0 34px rgba(0,255,65,.4);}
+
+/* غطاء كامل الصفحة — بس للتشامبيون (نار) وذا مشين (تشويش/كلتش) */
+#ftPageOverlay{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;transition:opacity 1.4s ease;overflow:hidden;}
+#ftPageOverlay.ft-show{opacity:1;}
+#ftPageOverlay.ft-champion{background:radial-gradient(ellipse at 50% 115%, rgba(140,25,0,.5) 0%, rgba(40,8,0,.28) 45%, transparent 75%);}
+#ftPageOverlay.ft-machine{background:radial-gradient(circle at 50% 50%, rgba(0,50,0,.42) 0%, rgba(0,10,0,.32) 60%, transparent 100%);}
+#ftPageOverlay.ft-machine::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg, rgba(0,255,65,.05) 0px, rgba(0,255,65,.05) 1px, transparent 1px, transparent 4px);animation:ftGlitchSlide 4s linear infinite;}
+#ftPageOverlay.ft-machine::after{content:'';position:absolute;inset:0;mix-blend-mode:overlay;animation:ftGlitchFlicker 3s steps(1) infinite;}
+.ft-embers{position:absolute;inset:0;}
+.ft-ember{position:absolute;bottom:-10px;border-radius:50%;animation:ftEmberRise linear infinite;}
+@keyframes ftGlitchSlide{0%{transform:translateY(0);}100%{transform:translateY(100%);}}
+@keyframes ftGlitchFlicker{0%,89%,100%{opacity:0;}90%,93%{opacity:.5;}94%,98%{opacity:0;}}
+@keyframes ftEmberRise{0%{transform:translateY(0) translateX(0);opacity:0;}10%{opacity:1;}100%{transform:translateY(-110vh) translateX(var(--ft-dx,0px));opacity:0;}}
+@media (prefers-reduced-motion: reduce){.ftbadge,#ftPageOverlay,#ftPageOverlay::before,#ftPageOverlay::after,.ft-ember{animation:none !important;}}
 `;
         document.head.appendChild(style);
     }
 
-    function renderInto(el, rankInfo) {
-        const { rank, idx, isMachine } = rankInfo;
-        const cls = tierClass(idx, isMachine);
-        el.innerHTML = `<span class="ftbadge ${cls}" style="--ftbadge-color:${rank.color};" title="Focus Tracker — ${rank.label}">${rank.icon}</span>`;
+    function renderBadge(el, rankInfo) {
+        const { rank, tier } = rankInfo;
+        el.innerHTML = `<span class="ftbadge ftbadge-${tier}" style="--ftbadge-color:${rank.color};" title="Focus Tracker — ${rank.label}">${rank.icon}</span>`;
+    }
+
+    function applyTopbarEffect(tier) {
+        const bar = document.querySelector('.topbar');
+        if (!bar) return;
+        ['ft-topbar-neon', 'ft-topbar-champion', 'ft-topbar-unreal', 'ft-topbar-machine'].forEach(c => bar.classList.remove(c));
+        if (tier === 'neon') bar.classList.add('ft-topbar-neon');
+        else if (tier === 'champion') bar.classList.add('ft-topbar-champion');
+        else if (tier === 'unreal') bar.classList.add('ft-topbar-unreal');
+        else if (tier === 'machine') bar.classList.add('ft-topbar-machine');
+    }
+
+    function buildEmbers(count) {
+        let out = '';
+        for (let i = 0; i < count; i++) {
+            const left = (Math.random() * 100).toFixed(1);
+            const delay = (Math.random() * 5).toFixed(2);
+            const dur = (4 + Math.random() * 3).toFixed(2);
+            const dx = (Math.random() * 60 - 30).toFixed(0);
+            const size = (2 + Math.random() * 3).toFixed(1);
+            const c = Math.random() > .5 ? '#ff6a00' : '#ffb000';
+            out += `<span class="ft-ember" style="left:${left}%;width:${size}px;height:${size}px;background:${c};box-shadow:0 0 6px ${c};--ft-dx:${dx}px;animation-duration:${dur}s;animation-delay:${delay}s;"></span>`;
+        }
+        return out;
+    }
+
+    function applyPageOverlay(tier) {
+        let overlay = document.getElementById('ftPageOverlay');
+        if (tier !== 'champion' && tier !== 'machine') {
+            if (overlay) overlay.classList.remove('ft-show');
+            return;
+        }
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'ftPageOverlay';
+            document.body.appendChild(overlay);
+        }
+        overlay.className = ''; // نصفر الأصناف القديمة
+        overlay.classList.add(tier === 'champion' ? 'ft-champion' : 'ft-machine');
+        overlay.innerHTML = tier === 'champion' ? `<div class="ft-embers">${buildEmbers(18)}</div>` : '';
+        requestAnimationFrame(() => overlay.classList.add('ft-show'));
     }
 
     async function initOne(el) {
         try {
             if (!window.FirebaseSync || !window.INJAZ_FIREBASE_CONFIG) return;
             window.FirebaseSync.init(window.INJAZ_FIREBASE_CONFIG);
-            // قراءة عامة بدون تسجيل دخول — نفس منطق لوحة المشاهدة بإنجاز بالضبط
             const data = await window.FirebaseSync.readOnce(FIREBASE_PATH);
-            if (!data) return; // ما اكو بيانات بعد (لسه ما فتحت focus-tracker.html من جهاز متزامن) — نخلي الشارة فاضية بدل ما نخطئ برقم
+            if (!data) return;
             injectStyles();
             const weekTotal = computeWeekTotal(data);
             const rankInfo = getRankInfo(weekTotal, data.rankThresholds);
-            renderInto(el, rankInfo);
+            renderBadge(el, rankInfo);
+            applyTopbarEffect(rankInfo.tier);
+            applyPageOverlay(rankInfo.tier);
         } catch (err) {
             console.error('فشل جلب شارة Focus Tracker:', err);
         }
@@ -132,7 +192,6 @@
         document.querySelectorAll('[data-ft-badge]').forEach(initOne);
     }
 
-    // يشتغل الحين إذا firebase-bridge خلص أصلاً (نادر)، وإلا ينتظر الحدث
     if (window.FirebaseSync) initAll();
     window.addEventListener('firebase-bridge-ready', initAll);
 
