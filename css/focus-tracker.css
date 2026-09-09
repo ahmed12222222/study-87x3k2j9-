@@ -358,9 +358,17 @@ body {
 }
 
 /* ---------- الزر البعيد اللي يفتح الإعدادات ---------- */
+.utility-row {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 22px;
+}
 .settings-trigger {
-    display: block;
-    margin: 22px auto 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
     width: 40px;
     height: 40px;
     border-radius: 50%;
@@ -372,7 +380,8 @@ body {
     opacity: 0.55;
     transition: opacity 0.2s ease, transform 0.2s ease;
 }
-.settings-trigger:hover { opacity: 1; transform: rotate(45deg); }
+.settings-trigger:hover { opacity: 1; transform: scale(1.08); }
+#settingsTriggerBtn:hover { transform: rotate(45deg); }
 
 /* ---------- نافذة الإعدادات والتحكم ---------- */
 .settings-modal-overlay {
@@ -447,6 +456,13 @@ body {
 .settings-subsection details[open] summary::before { content: '▼  '; font-size: 0.75em; opacity: 0.7; }
 
 .form-hint { display: block; font-size: 0.75em; color: #888; margin: 4px 0 10px; line-height: 1.5; }
+.injaz-preview {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 8px;
+    padding: 10px;
+    margin-top: 10px;
+}
 
 /* ---------- محرر عتبات الرتب ---------- */
 .rank-edit-list { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; }
