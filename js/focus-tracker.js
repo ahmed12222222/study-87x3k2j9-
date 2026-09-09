@@ -10,6 +10,9 @@ const MAX_WEEK  = 700;
 const MAX_DAY   = 100;
 const MAX_MONTH = 3000;
 
+// عتبة THE MACHINE — رقم ثابت مخفي، ما تنعرض ولا تتعدل من أي إعدادات عمداً
+const MACHINE_THRESHOLD = 900;
+
 const WIZARY_DATE = moment('2027-06-01');
 
 const RANKS = [
@@ -433,7 +436,7 @@ function computeState(appData, now) {
     const maxSubPts     = Math.max(...Object.values(subjectMap), 1);
 
     // ----- الرتب -----
-    let isTheMachine = weekTotal >= (MAX_WEEK * 1.5);
+    let isTheMachine = weekTotal >= (MACHINE_THRESHOLD);
     let rank    = getWeekRank(weekTotal);
     let rankIdx = currentRanks.findIndex(r => weekTotal >= r.min);
 
@@ -573,7 +576,7 @@ function buildDashboardHtml(state) {
         .map(([key, pts]) => {
             const wStart = moment(key);
             const wEnd   = moment(key).endOf('week');
-            const r      = pts >= (MAX_WEEK * 1.5) ? {label:'THE MACHINE', color:'#00FF41', icon:'👁️'} : getWeekRank(pts);
+            const r      = pts >= (MACHINE_THRESHOLD) ? {label:'THE MACHINE', color:'#00FF41', icon:'👁️'} : getWeekRank(pts);
             const pct    = Math.min(pts / MAX_WEEK * 100, 100);
             const { rowBg, badgeCss } = getRowTierStyle(r.label, r.color);
             return `<tr${rowBg}>
@@ -803,6 +806,63 @@ function clearAllData() {
     applyRankOverrides();
     refreshAll();
 }
+
+// ============================================================
+// استيراد من إنجاز — يجيب بيانات يوم معين من إنجاز (محلياً أولاً بما إنه نفس
+// الأصل، وفايربيز كحل بديل لو الجهاز غير)، ويحسب النقاط بنفس معادلة إنجاز
+// بالضبط (shared.js: computeStats) — بس اقتراح، هو يأكد يدوياً.
+// ============================================================
+async function fetchInjazRawData() {
+    if (typeof localStorage !== 'undefined') {
+        try {
+            const raw = localStorage.getItem('injaz_data_v1');
+            if (raw) {
+                const parsed = JSON.parse(raw);
+                if (parsed && typeof parsed === 'object') return { data: parsed, source: 'محلياً (نفس المتصفح)' };
+            }
+        } catch (e) { console.error('فشل قراءة بيانات إنجاز المحلية:', e); }
+    }
+    if (typeof window !== 'undefined' && window.FirebaseSync && window.INJAZ_FIREBASE_CONFIG) {
+        try {
+            window.FirebaseSync.init(window.INJAZ_FIREBASE_CONFIG);
+            const remote = await window.FirebaseSync.readOnce('injaz');
+            if (remote && typeof remote === 'object') return { data: remote, source: 'السحابة (Firebase)' };
+        } catch (e) { console.error('فشل جلب بيانات إنجاز من فايربيز:', e); }
+    }
+    return null;
+}
+
+// نفس معادلة computeStats بملف shared.js مال إنجاز بالضبط — بس الجزء المتعلق بالنقاط
+function computeInjazPointsForDay(injazData, dateStr) {
+    const settings = (injazData && injazData.settings) || {};
+    const dayObj = (injazData && injazData.days && injazData.days[dateStr]) || {};
+    const study = Array.isArray(dayObj.study) ? dayObj.study : [];
+    const achievements = Array.isArray(dayObj.achievements) ? dayObj.achievements : [];
+    const studyMinutes = study.reduce((s, x) => s + (Number(x && x.minutes) || 0), 0);
+    const doneCount = achievements.filter(a => a && a.done).length;
+    const pointsPerMinute = (typeof settings.pointsPerMinute === 'number') ? settings.pointsPerMinute : 1;
+    const pointsPerAchievement = (typeof settings.pointsPerAchievement === 'number') ? settings.pointsPerAchievement : 20;
+    const points = Math.round(studyMinutes * pointsPerMinute) + doneCount * pointsPerAchievement;
+    return { studyMinutes, doneCount, points };
+}
+
+// يستورد كـ إدخال بمادة "إنجاز" — إذا كان أصلاً موجود إدخال "إنجاز" لنفس التاريخ يحدّثه بدل ما يكرره
+function importInjazEntry(dateStr, points) {
+    const existing = appData.entries.find(e => e.date === dateStr && e.subject === 'إنجاز');
+    if (existing) {
+        existing.points = Math.max(0, Math.round(Number(points) || 0));
+    } else {
+        appData.entries.push({
+            id: uid('e'),
+            points: Math.max(0, Math.round(Number(points) || 0)),
+            subject: 'إنجاز',
+            date: dateStr,
+        });
+    }
+    saveData(appData);
+    refreshAll();
+}
+
 
 function exportData() {
     const blob = new Blob([JSON.stringify(appData, null, 2)], { type: 'application/json' });
@@ -1134,6 +1194,38 @@ if (typeof document !== 'undefined') {
         const resetRanksBtn = document.getElementById('resetRanksBtn');
         if (resetRanksBtn) resetRanksBtn.addEventListener('click', resetRankThresholds);
 
+        // ----- استيراد من إنجاز -----
+        const injazDateEl = document.getElementById('injazImportDate');
+        if (injazDateEl) injazDateEl.value = moment().subtract(1, 'day').format('YYYY-MM-DD'); // افتراضياً الأمس (يوم كامل خلص)
+
+        const injazFetchBtn = document.getElementById('injazFetchBtn');
+        if (injazFetchBtn) {
+            injazFetchBtn.addEventListener('click', async () => {
+                const previewEl = document.getElementById('injazImportPreview');
+                const dateStr = injazDateEl.value;
+                if (!dateStr || !previewEl) return;
+                previewEl.style.display = '';
+                previewEl.innerHTML = '<span class="form-hint">⏳ يجيب البيانات...</span>';
+                const result = await fetchInjazRawData();
+                if (!result) {
+                    previewEl.innerHTML = '<span class="form-hint">⚠️ ما لكيت بيانات إنجاز — لا محلياً ولا بالسحابة.</span>';
+                    return;
+                }
+                const { studyMinutes, doneCount, points } = computeInjazPointsForDay(result.data, dateStr);
+                previewEl.innerHTML = `
+                    <div class="form-hint">📚 دراسة: <bdi dir="ltr">${studyMinutes}</bdi> د · ✅ إنجازات: <bdi dir="ltr">${doneCount}</bdi> · جلبتها ${result.source}</div>
+                    <div class="qa-row" style="margin-top:8px;">
+                        <input type="number" id="injazSuggestedPoints" min="0" step="1" value="${points}" style="flex:1;">
+                        <button type="button" id="injazConfirmBtn" class="qa-btn qa-btn-primary">✅ استيراد</button>
+                    </div>`;
+                document.getElementById('injazConfirmBtn').addEventListener('click', () => {
+                    const finalPoints = parseInt(document.getElementById('injazSuggestedPoints').value, 10) || 0;
+                    importInjazEntry(dateStr, finalPoints);
+                    previewEl.innerHTML = `<span class="form-hint">✓ انستورد ${finalPoints} نقطة ليوم ${dateStr}.</span>`;
+                });
+            });
+        }
+
         const newBonusBtn = document.getElementById('newBonusBtn');
         const bonusNewForm = document.getElementById('bonusNewForm');
         let pendingNewBonusStages = [];
@@ -1207,6 +1299,7 @@ if (typeof module !== 'undefined' && module.exports) {
     module.exports = {
         computeState, buildDashboardHtml, RANKS, MONTH_RANKS,
         getWeekRank, getMonthRank, MAX_DAY, MAX_WEEK, MAX_MONTH,
+        computeInjazPointsForDay, importInjazEntry,
         bonusColorForRatio, lerpColorHex, hexToRgb, buildBonusPips,
         createBonus, levelUpBonus, levelDownBonus, deleteBonus, getActiveMultiplier, bonusStageMultiplier,
         addStageToBonus, removeStageFromBonus, checkDailyBonusReset,

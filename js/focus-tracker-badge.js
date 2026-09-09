@@ -14,7 +14,6 @@
    ============================================================ */
 (function () {
     const FIREBASE_PATH = 'focusTracker';
-    const MAX_WEEK = 700;
 
     const RANKS = [
         { min:740, icon:'👑', label:'UNREAL',   color:'#FFD700' },
@@ -26,7 +25,7 @@
         { min:300, icon:'🛡️', label:'SILVER',  color:'#C0C0C0' },
         { min:0,   icon:'🗑️', label:'BRONZE',  color:'#CD7F32' },
     ];
-    const MACHINE_RANK = { min:1050, icon:'👁️', label:'THE MACHINE', color:'#00FF41' };
+    const MACHINE_RANK = { min:900, icon:'👁️', label:'THE MACHINE', color:'#00FF41' };
 
     function startOfWeek(d) {
         const dt = new Date(d);
@@ -76,7 +75,7 @@
     // idx: 0=UNREAL ... 7=BRONZE، isMachine=true يتخطى الكل. يرجّع أيضاً اسم "طبقة" موحّد
     // نستخدمه بثلاثتهم: الشارة، الشريط، وغطاء الصفحة.
     function getRankInfo(weekTotal, thresholds) {
-        if (weekTotal >= MAX_WEEK * 1.5) return { rank: MACHINE_RANK, idx: -1, isMachine: true, tier: 'machine' };
+        if (weekTotal >= MACHINE_RANK.min) return { rank: MACHINE_RANK, idx: -1, isMachine: true, tier: 'machine' };
         const ranks = effectiveRanks(thresholds);
         const idx = ranks.findIndex(r => weekTotal >= r.min);
         let tier = 'plain';
