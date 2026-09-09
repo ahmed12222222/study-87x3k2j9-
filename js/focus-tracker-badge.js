@@ -72,8 +72,14 @@
         return total;
     }
 
-    // idx: 0=UNREAL ... 7=BRONZE، isMachine=true يتخطى الكل. يرجّع أيضاً اسم "طبقة" موحّد
-    // نستخدمه بثلاثتهم: الشارة، الشريط، وغطاء الصفحة.
+    // idx: 0=UNREAL 1=CHAMPION 2=ELITE 3=DIAMOND 4=PLATINUM 5=GOLD 6=SILVER 7=BRONZE
+    // سلّم تصاعدي بسبع درجات بالضبط زي ما تحدد:
+    //   بلاتيني/ذهبي  -> لون بس على الدائرة
+    //   دايموند       -> بريق/تدرج + حدود ملونة، بس على الدائرة برضو
+    //   إيليت         -> أول درجة توصل الشريط الكامل فوق
+    //   تشامبيون      -> نار خفيفة فوق خلفية الصفحة
+    //   أنريل         -> نفس الفكرة بس أقوى بكثير (خلفية كاملة فخمة)
+    //   ذا مشين       -> أقوى بكثير من أنريل (تشويش/كلتش قوي جداً)
     function getRankInfo(weekTotal, thresholds) {
         if (weekTotal >= MACHINE_RANK.min) return { rank: MACHINE_RANK, idx: -1, isMachine: true, tier: 'machine' };
         const ranks = effectiveRanks(thresholds);
@@ -81,7 +87,9 @@
         let tier = 'plain';
         if (idx === 0) tier = 'unreal';
         else if (idx === 1) tier = 'champion';
-        else if (idx >= 2 && idx <= 5) tier = 'neon';
+        else if (idx === 2) tier = 'elite';
+        else if (idx === 3) tier = 'diamond';
+        else if (idx === 4 || idx === 5) tier = 'goldplat';
         return { rank: ranks[idx], idx, isMachine: false, tier };
     }
 
@@ -93,14 +101,14 @@
     function applyTopbarEffect(tier) {
         const bar = document.querySelector('.topbar');
         if (!bar) return;
-        ['ft-topbar-neon', 'ft-topbar-champion', 'ft-topbar-unreal', 'ft-topbar-machine'].forEach(c => bar.classList.remove(c));
-        if (tier === 'neon') bar.classList.add('ft-topbar-neon');
+        ['ft-topbar-elite', 'ft-topbar-champion', 'ft-topbar-unreal', 'ft-topbar-machine'].forEach(c => bar.classList.remove(c));
+        if (tier === 'elite') bar.classList.add('ft-topbar-elite');
         else if (tier === 'champion') bar.classList.add('ft-topbar-champion');
         else if (tier === 'unreal') bar.classList.add('ft-topbar-unreal');
         else if (tier === 'machine') bar.classList.add('ft-topbar-machine');
     }
 
-    function buildEmbers(count) {
+    function buildEmbers(count, colors) {
         let out = '';
         for (let i = 0; i < count; i++) {
             const left = (Math.random() * 100).toFixed(1);
@@ -108,7 +116,7 @@
             const dur = (4 + Math.random() * 3).toFixed(2);
             const dx = (Math.random() * 60 - 30).toFixed(0);
             const size = (2 + Math.random() * 3).toFixed(1);
-            const c = Math.random() > .5 ? '#ff6a00' : '#ffb000';
+            const c = colors[Math.floor(Math.random() * colors.length)];
             out += `<span class="ft-ember" style="left:${left}%;width:${size}px;height:${size}px;background:${c};box-shadow:0 0 6px ${c};--ft-dx:${dx}px;animation-duration:${dur}s;animation-delay:${delay}s;"></span>`;
         }
         return out;
@@ -116,7 +124,7 @@
 
     function applyPageOverlay(tier) {
         let overlay = document.getElementById('ftPageOverlay');
-        if (tier !== 'champion' && tier !== 'machine') {
+        if (tier !== 'champion' && tier !== 'unreal' && tier !== 'machine') {
             if (overlay) overlay.classList.remove('ft-show');
             return;
         }
@@ -126,8 +134,14 @@
             document.body.appendChild(overlay);
         }
         overlay.className = ''; // نصفر الأصناف القديمة
-        overlay.classList.add(tier === 'champion' ? 'ft-champion' : 'ft-machine');
-        overlay.innerHTML = tier === 'champion' ? `<div class="ft-embers">${buildEmbers(18)}</div>` : '';
+        overlay.classList.add('ft-' + tier);
+        if (tier === 'champion') {
+            overlay.innerHTML = `<div class="ft-embers">${buildEmbers(10, ['#ff6a00', '#ffb000'])}</div>`;
+        } else if (tier === 'unreal') {
+            overlay.innerHTML = `<div class="ft-aura"></div><div class="ft-embers">${buildEmbers(26, ['#FFD700', '#ff6a00', '#fff4c2'])}</div>`;
+        } else {
+            overlay.innerHTML = '';
+        }
         requestAnimationFrame(() => overlay.classList.add('ft-show'));
     }
 
