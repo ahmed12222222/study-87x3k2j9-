@@ -2,35 +2,103 @@
    Focus Tracker — تنسيق شارة الرتبة + تأثيرات الصفحة
    يستخدمه js/focus-tracker-badge.js. حط <link> إله بـ admin.html و index.html
    جنب css/style.css و css/themes.css الموجودين أصلاً.
+
+   سلّم التأثير (من الأضعف للأقوى):
+   بلاتيني/ذهبي -> لون بس على الدائرة
+   دايموند      -> بريق متحرك + حدود ملونة، بس على الدائرة
+   إيليت        -> الشريط العلوي كامل يتوهج
+   تشامبيون     -> نار خفيفة فوق خلفية الصفحة
+   أنريل        -> خلفية كاملة فخمة (أقوى بكثير من تشامبيون)
+   ذا مشين      -> تشويش/كلتش قوي جداً (أقوى بكثير من أنريل)
    ============================================================ */
 
-/* الشارة نفسها — تحجم طبيعي متل أي إيموجي بالنص، بدون صندوق مفروض يكسر صف الأيقونات */
-.ftbadge{display:inline-block;line-height:1;vertical-align:middle;transition:filter .4s ease, transform .3s ease;}
-.ftbadge-plain{filter:grayscale(.2) brightness(.9);}
-.ftbadge-neon{filter:drop-shadow(0 0 3px var(--ftbadge-color));animation:ftbadgePulse 2.6s ease-in-out infinite;}
-.ftbadge-champion{filter:drop-shadow(0 0 5px var(--ftbadge-color));animation:ftbadgePulse 1.8s ease-in-out infinite;}
-.ftbadge-unreal{filter:drop-shadow(0 0 6px var(--ftbadge-color));animation:ftbadgePulse 1.4s ease-in-out infinite;}
-.ftbadge-machine{filter:drop-shadow(0 0 6px var(--ftbadge-color));animation:ftbadgePulseFast .9s ease-in-out infinite;}
-@keyframes ftbadgePulse{0%,100%{transform:scale(1);}50%{transform:scale(1.12);}}
-@keyframes ftbadgePulseFast{0%,100%{transform:scale(1);}50%{transform:scale(1.2);}}
+/* ---------- الشارة نفسها: صندوق مستقل بحجمه، ما يعتمد على أي CSS ثاني ---------- */
+.ftbadge{
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 28px;
+    height: 28px;
+    font-size: 15px;
+    line-height: 1;
+    border-radius: 50%;
+    vertical-align: middle;
+    border: 2px solid transparent;
+    background: rgba(255,255,255,0.04);
+    transition: border-color .4s ease, box-shadow .4s ease, background .4s ease;
+}
+.ftbadge-plain{ filter: grayscale(.25) brightness(.85); }
 
-/* توهج على .topbar كامل — إضافة فوق تصميمك الموجود، ما تبدله */
-.topbar{transition:box-shadow .6s ease, border-color .6s ease;}
-.ft-topbar-neon{box-shadow:0 0 0 1px rgba(0,191,255,.25) inset, 0 0 22px rgba(0,191,255,.22);}
-.ft-topbar-champion{box-shadow:0 0 0 1px rgba(255,107,0,.35) inset, 0 0 30px rgba(255,90,0,.35);}
-.ft-topbar-unreal{box-shadow:0 0 0 1px rgba(255,215,0,.4) inset, 0 0 34px rgba(255,215,0,.4);}
-.ft-topbar-machine{box-shadow:0 0 0 1px rgba(0,255,65,.4) inset, 0 0 34px rgba(0,255,65,.4);}
+.ftbadge-goldplat{
+    border-color: var(--ftbadge-color);
+    box-shadow: 0 0 7px var(--ftbadge-color);
+}
 
-/* غطاء كامل الصفحة — بس للتشامبيون (نار) وذا مشين (تشويش/كلتش) */
+.ftbadge-diamond{
+    border-color: var(--ftbadge-color);
+    box-shadow: 0 0 9px var(--ftbadge-color);
+    background: linear-gradient(120deg, rgba(136,221,255,.12) 0%, rgba(255,255,255,.4) 45%, rgba(136,221,255,.12) 60%, rgba(255,255,255,.12) 100%);
+    background-size: 260% 260%;
+    animation: ftDiamondShimmer 2.4s ease-in-out infinite;
+}
+
+.ftbadge-elite{
+    border-color: var(--ftbadge-color);
+    box-shadow: 0 0 9px var(--ftbadge-color);
+    animation: ftbadgePulse 2.2s ease-in-out infinite;
+}
+.ftbadge-champion{
+    border-color: var(--ftbadge-color);
+    box-shadow: 0 0 10px var(--ftbadge-color);
+    animation: ftbadgePulse 1.7s ease-in-out infinite;
+}
+.ftbadge-unreal{
+    border-color: var(--ftbadge-color);
+    box-shadow: 0 0 12px var(--ftbadge-color);
+    animation: ftbadgePulse 1.3s ease-in-out infinite;
+}
+.ftbadge-machine{
+    border-color: var(--ftbadge-color);
+    box-shadow: 0 0 12px var(--ftbadge-color);
+    animation: ftbadgePulseFast .8s ease-in-out infinite;
+}
+
+@keyframes ftbadgePulse{0%,100%{transform:scale(1);}50%{transform:scale(1.1);}}
+@keyframes ftbadgePulseFast{0%,100%{transform:scale(1);}50%{transform:scale(1.18);}}
+@keyframes ftDiamondShimmer{0%{background-position:0% 50%;}50%{background-position:100% 50%;}100%{background-position:0% 50%;}}
+
+/* ---------- توهج على .topbar كامل — يبدأ من إيليت فوك ---------- */
+.topbar{ transition: box-shadow .6s ease; }
+.ft-topbar-elite{box-shadow:0 0 0 1px rgba(0,191,255,.22) inset, 0 0 18px rgba(0,191,255,.2);}
+.ft-topbar-champion{box-shadow:0 0 0 1px rgba(255,107,0,.32) inset, 0 0 26px rgba(255,90,0,.32);}
+.ft-topbar-unreal{box-shadow:0 0 0 1px rgba(255,215,0,.4) inset, 0 0 32px rgba(255,215,0,.4);}
+.ft-topbar-machine{box-shadow:0 0 0 1px rgba(0,255,65,.4) inset, 0 0 32px rgba(0,255,65,.4);}
+
+/* ---------- غطاء كامل الصفحة — تشامبيون (خفيف) / أنريل (قوي) / ذا مشين (أقوى بكثير) ---------- */
 #ftPageOverlay{position:fixed;inset:0;z-index:3;pointer-events:none;opacity:0;transition:opacity 1.4s ease;overflow:hidden;}
 #ftPageOverlay.ft-show{opacity:1;}
-#ftPageOverlay.ft-champion{background:radial-gradient(ellipse at 50% 115%, rgba(140,25,0,.5) 0%, rgba(40,8,0,.28) 45%, transparent 75%);}
-#ftPageOverlay.ft-machine{background:radial-gradient(circle at 50% 50%, rgba(0,50,0,.42) 0%, rgba(0,10,0,.32) 60%, transparent 100%);}
-#ftPageOverlay.ft-machine::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg, rgba(0,255,65,.05) 0px, rgba(0,255,65,.05) 1px, transparent 1px, transparent 4px);animation:ftGlitchSlide 4s linear infinite;}
-#ftPageOverlay.ft-machine::after{content:'';position:absolute;inset:0;mix-blend-mode:overlay;animation:ftGlitchFlicker 3s steps(1) infinite;}
+
+/* تشامبيون: نار خفيفة، شفافة، بدون هالة */
+#ftPageOverlay.ft-champion{background:radial-gradient(ellipse at 50% 120%, rgba(140,25,0,.24) 0%, rgba(40,8,0,.12) 45%, transparent 72%);}
+
+/* أنريل: خلفية ذهبية فخمة + هالة دوّارة + شرر أكثر وأقوى */
+#ftPageOverlay.ft-unreal{background:radial-gradient(ellipse at 50% 115%, rgba(180,120,0,.5) 0%, rgba(60,35,0,.3) 45%, transparent 78%);}
+#ftPageOverlay.ft-unreal .ft-aura{position:absolute;inset:-20%;background:conic-gradient(from 0deg,#FFD700,#ff8c00,#FFD700,#ff2200,#FFD700);opacity:.14;animation:ftAuraSpin 6s linear infinite;}
+
+/* ذا مشين: تشويش/كلتش قوي جداً — طبقتين متحركتين + وميض */
+#ftPageOverlay.ft-machine{background:radial-gradient(circle at 50% 50%, rgba(0,60,0,.55) 0%, rgba(0,12,0,.4) 55%, transparent 100%);}
+#ftPageOverlay.ft-machine::before{content:'';position:absolute;inset:0;background:repeating-linear-gradient(0deg, rgba(0,255,65,.08) 0px, rgba(0,255,65,.08) 1px, transparent 1px, transparent 3px);animation:ftGlitchSlide 2.6s linear infinite;}
+#ftPageOverlay.ft-machine::after{content:'';position:absolute;inset:0;background:repeating-linear-gradient(90deg, rgba(0,255,65,.05) 0px, transparent 2px, transparent 6px);mix-blend-mode:overlay;animation:ftGlitchFlicker 2.2s steps(1) infinite;}
+
 .ft-embers{position:absolute;inset:0;}
 .ft-ember{position:absolute;bottom:-10px;border-radius:50%;animation:ftEmberRise linear infinite;}
+
+@keyframes ftAuraSpin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 @keyframes ftGlitchSlide{0%{transform:translateY(0);}100%{transform:translateY(100%);}}
-@keyframes ftGlitchFlicker{0%,89%,100%{opacity:0;}90%,93%{opacity:.5;}94%,98%{opacity:0;}}
+@keyframes ftGlitchFlicker{0%,80%,100%{opacity:0;}82%,85%{opacity:.7;}87%,92%{opacity:0;}94%,96%{opacity:.5;}}
 @keyframes ftEmberRise{0%{transform:translateY(0) translateX(0);opacity:0;}10%{opacity:1;}100%{transform:translateY(-110vh) translateX(var(--ft-dx,0px));opacity:0;}}
-@media (prefers-reduced-motion: reduce){.ftbadge,#ftPageOverlay,#ftPageOverlay::before,#ftPageOverlay::after,.ft-ember{animation:none !important;}}
+
+@media (prefers-reduced-motion: reduce){
+    .ftbadge, #ftPageOverlay, #ftPageOverlay::before, #ftPageOverlay::after, .ft-ember, .ft-aura { animation: none !important; }
+}
