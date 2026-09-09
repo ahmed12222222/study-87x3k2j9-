@@ -15,7 +15,10 @@
   <div id="bonusReadonlyBox"></div>
 
   <!-- زر بعيد وصغير يفتح كل أدوات التحكم -->
-  <button type="button" id="settingsTriggerBtn" class="settings-trigger" title="الإعدادات والتحكم" aria-label="الإعدادات والتحكم">⚙️</button>
+  <div class="utility-row">
+    <a href="admin.html" class="settings-trigger" title="رجوع للوحة التحكم" aria-label="رجوع للوحة التحكم">⬅️</a>
+    <button type="button" id="settingsTriggerBtn" class="settings-trigger" title="الإعدادات والتحكم" aria-label="الإعدادات والتحكم">⚙️</button>
+  </div>
 
   <!-- نافذة الإعدادات والتحكم — هنا يصير كل تعديل، بعيد كلياً عن الواجهة الرئيسية -->
   <div class="settings-modal-overlay" id="settingsModalOverlay">
@@ -27,6 +30,7 @@
 
       <div class="settings-tabs">
         <button type="button" class="settings-tab active" data-tab="entry">تسجيل نقاط</button>
+        <button type="button" class="settings-tab" data-tab="injaz">من إنجاز</button>
         <button type="button" class="settings-tab" data-tab="bonuses">البونسات</button>
         <button type="button" class="settings-tab" data-tab="ranks">الرتب</button>
         <button type="button" class="settings-tab" data-tab="data">البيانات</button>
@@ -63,6 +67,18 @@
             <summary>📋 سجل الإدخالات</summary>
             <div id="logList" class="log-list"></div>
           </details>
+        </div>
+
+        <!-- استيراد من إنجاز -->
+        <div class="settings-pane" data-pane="injaz">
+          <div class="qa-title">📥 استيراد من إنجاز</div>
+          <span class="form-hint">يجيب نقاط يوم معين من إنجاز كـ"اقتراح" — تعدله وتأكده بنفسك، ما ينحسب أوتوماتيكياً ولا يتكرر.</span>
+          <div class="qa-field" style="margin:10px 0;">
+            <label for="injazImportDate">التاريخ</label>
+            <input type="date" id="injazImportDate">
+          </div>
+          <button type="button" id="injazFetchBtn" class="qa-btn qa-btn-secondary qa-btn-full">🔄 اجلب من إنجاز</button>
+          <div id="injazImportPreview" class="injaz-preview" style="display:none;"></div>
         </div>
 
         <!-- البونسات -->
