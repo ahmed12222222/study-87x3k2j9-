@@ -1026,9 +1026,63 @@ function openSettings(tab){
   showModal('modal-settings');
 }
 
+function renderAdminRankStylesGallery() {
+  const gallery = document.getElementById('adminRankStylesGallery');
+  if (!gallery || !window.RankSvgs || !window.RankSvgs.TIERS) return;
+
+  const tiers = window.RankSvgs.TIERS;
+  gallery.innerHTML = tiers.map(tier => {
+    const selected = window.RankSvgs.getSelectedVariant(tier.key);
+    const variants = window.RankSvgs.getAllVariants(tier.key);
+
+    const variantsHtml = variants.map(v => {
+      const isSel = (v.id === selected);
+      const svgStr = v.svg(52);
+      const fxClass = ['platinum','diamond','elite','champion','unreal','machine'].includes(tier.key) ? `fx-${tier.key}` : '';
+      const fxDecor = (window.RankSvgs && window.RankSvgs.getDecor) ? window.RankSvgs.getDecor(tier.key) : '';
+      return `
+      <div class="variant-card ${isSel ? 'active' : ''}" data-tier="${tier.key}" data-variant="${v.id}" style="--tier-color:${tier.color};">
+        ${isSel ? '<span class="variant-active-badge">✓ مفعّل</span>' : ''}
+        <div class="variant-preview ${fxClass}">${fxDecor}${svgStr}</div>
+        <div class="variant-title">${escapeHtml(v.name)}</div>
+        <div class="variant-desc">${escapeHtml(v.desc)}</div>
+      </div>`;
+    }).join('');
+
+    return `
+    <div class="tier-style-card" style="border-right: 3px solid ${tier.color};">
+      <div class="tier-style-head">
+        <div class="tier-style-title" style="color:${tier.color};">
+          <span>${tier.arName} (${tier.label})</span>
+        </div>
+        <span class="tier-style-badge">التصميم المختار: شكل ${selected}</span>
+      </div>
+      <div class="tier-variants-grid">
+        ${variantsHtml}
+      </div>
+    </div>`;
+  }).join('');
+
+  gallery.querySelectorAll('.variant-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const tierKey = card.dataset.tier;
+      const vId = parseInt(card.dataset.variant, 10);
+      window.RankSvgs.setSelectedVariant(tierKey, vId);
+      renderAdminRankStylesGallery();
+      if (window.FocusTrackerBadge && window.FocusTrackerBadge.refresh) {
+        window.FocusTrackerBadge.refresh();
+      }
+      toast(`تم تفعيل شكل ${vId} لرتبة ${tierKey} بنجاح ✓`);
+    });
+  });
+}
+
 function switchSettingsTab(tab){
   document.querySelectorAll('.settings-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
   document.querySelectorAll('.settings-pane').forEach(p => p.classList.toggle('active', p.id === `pane-${tab}`));
+  if (tab === 'rank-styles') {
+    renderAdminRankStylesGallery();
+  }
 }
 
 /* -------------------- الرسم الشامل -------------------- */
@@ -1056,6 +1110,8 @@ function init(){
   setInterval(renderTimeline, 60000);
   if(DATA.activeTimer) startTickInterval();
   checkRemoteOnLoad();
+  fetchTodayVisits(true);
+  setInterval(() => fetchTodayVisits(false), 25000);
 
   document.getElementById('achieve-form').addEventListener('submit', (e) => { e.preventDefault(); addAchievement(); });
   document.getElementById('manualform-study').addEventListener('submit', (e) => { e.preventDefault(); submitManualEntry('study'); });
@@ -1077,8 +1133,283 @@ function init(){
       renderAll();
       renderHeaderClock();
       if(DATA.activeTimer) startTickInterval();
+      fetchTodayVisits(false);
     }
   });
+}
+
+/* -------------------- إشعار وتتبع زوار الموقع اليوم -------------------- */
+let lastKnownVisitsCount = -1;
+let lastVisitsData = null;
+
+async function fetchTodayVisits(isFirstLoad = false) {
+  try {
+    const res = await fetch('/api/visits/today');
+    if (!res.ok) return;
+    const data = await res.json();
+    lastVisitsData = data;
+    const count = Number(data.count || 0);
+    const pill = document.getElementById('visitors-pill');
+    const txt = document.getElementById('visitors-count-text');
+    const dot = pill ? pill.querySelector('.visitor-pulse-dot') : null;
+
+    if (txt) {
+      if (count === 0) {
+        txt.textContent = 'الزوار اليوم: 0';
+        if (dot) dot.classList.remove('active');
+        if (pill) pill.title = 'لم يدخل أي زائر للموقع اليوم بعد';
+      } else if (count === 1) {
+        txt.textContent = 'دخل شخص اليوم (1)';
+        if (dot) dot.classList.add('active');
+        if (pill) pill.title = 'دخل شخص للموقع اليوم — اضغط للتفاصيل';
+      } else {
+        txt.textContent = `دخل ${count} زوار اليوم`;
+        if (dot) dot.classList.add('active');
+        if (pill) pill.title = `سُجّل دخول ${count} زوار للموقع اليوم — اضغط للتفاصيل`;
+      }
+    }
+
+    if (!isFirstLoad && lastKnownVisitsCount >= 0 && count > lastKnownVisitsCount) {
+      const diff = count - lastKnownVisitsCount;
+      toast(diff === 1 ? '👀 دخل شخص الآن لتصفح الموقع!' : `👀 دخل ${diff} زوار جدد للموقع!`, 'info');
+    }
+    lastKnownVisitsCount = count;
+  } catch(e) {
+    // Network or server offline, ignore
+  }
+}
+
+function showVisitorsNotice() {
+  if (!lastVisitsData || !lastVisitsData.count || lastVisitsData.count === 0) {
+    toast('لم يسجل دخول أي شخص للموقع اليوم بعد.', 'info');
+    return;
+  }
+  const count = lastVisitsData.count;
+  const timeStr = lastVisitsData.lastVisitTime ? `آخر دخول سُجّل كان في: ${lastVisitsData.lastVisitTime}` : '';
+  toast(`👥 زوار الموقع اليوم (بدون أسماء):\nسُجّل دخول ${count} ${count === 1 ? 'شخص' : 'أشخاص'} للموقع.\n${timeStr}`, 'success');
+}
+
+/* -------------------- تقرير الإنجاز والدراسة -------------------- */
+let currentReportScope = 'day';
+let currentGeneratedReportText = '';
+
+function openReportModal(scope) {
+  if (scope) currentReportScope = scope;
+  renderReportModal();
+  showModal('modal-report');
+}
+
+function setReportScope(scope) {
+  currentReportScope = scope;
+  renderReportModal();
+}
+
+function getDaysForWeek(dateKey) {
+  const d = new Date(dateKey + 'T12:00:00');
+  const dayOfWeek = d.getDay();
+  const start = new Date(d);
+  start.setDate(d.getDate() - ((dayOfWeek + 1) % 7));
+  const days = [];
+  for (let i = 0; i < 7; i++) {
+    const cur = new Date(start);
+    cur.setDate(start.getDate() + i);
+    days.push(todayKey(cur));
+  }
+  return days;
+}
+
+function renderReportModal() {
+  const body = document.getElementById('modal-report-body');
+  if (!body) return;
+
+  const isDay = currentReportScope === 'day';
+  const studentName = (DATA.settings && DATA.settings.studentName) || 'المذاكِر المجتهد';
+
+  let totalStudy = 0, totalBreak = 0, totalSleep = 0, totalPoints = 0;
+  let doneAchieves = [], pendingAchieves = [], studySessions = [], breakSessions = [], sleepSessions = [];
+  let periodTitle = '';
+
+  const targetKey = currentDayKey || todayKey();
+
+  if (isDay) {
+    const dObj = DATA.days[targetKey] || { study:[], breaks:[], sleep:[], achievements:[] };
+    const st = computeStats(dObj, DATA.settings);
+    totalStudy = st.studyMinutes;
+    totalBreak = st.breakMinutes;
+    totalSleep = st.sleepMinutes;
+    totalPoints = st.points;
+    doneAchieves = (dObj.achievements || []).filter(a => a.done);
+    pendingAchieves = (dObj.achievements || []).filter(a => !a.done);
+    studySessions = dObj.study || [];
+    breakSessions = dObj.breaks || [];
+    sleepSessions = dObj.sleep || [];
+    periodTitle = formatDateArabic(targetKey);
+  } else {
+    const weekKeys = getDaysForWeek(targetKey);
+    weekKeys.forEach(k => {
+      const dObj = DATA.days[k];
+      if (!dObj) return;
+      const st = computeStats(dObj, DATA.settings);
+      totalStudy += st.studyMinutes;
+      totalBreak += st.breakMinutes;
+      totalSleep += st.sleepMinutes;
+      totalPoints += st.points;
+      (dObj.achievements || []).forEach(a => {
+        if (a.done) doneAchieves.push({ ...a, date: k });
+        else pendingAchieves.push({ ...a, date: k });
+      });
+      (dObj.study || []).forEach(s => studySessions.push({ ...s, date: k }));
+      (dObj.breaks || []).forEach(s => breakSessions.push({ ...s, date: k }));
+      (dObj.sleep || []).forEach(s => sleepSessions.push({ ...s, date: k }));
+    });
+    periodTitle = `الأسبوع (${formatDateArabic(weekKeys[0])} — ${formatDateArabic(weekKeys[6])})`;
+  }
+
+  const formatSessionText = (s) => {
+    const startStr = s.start ? formatTime(s.start) : '';
+    const endStr = s.end ? formatTime(s.end) : '';
+    const timeRange = (startStr && endStr) ? `من ${startStr} إلى ${endStr}` : '';
+    const det = s.details ? ` (${s.details})` : '';
+    return `• ${formatDuration(s.minutes)} ${timeRange}${det}`;
+  };
+
+  let plain = `📊 *تقرير إنجاز ودراسة: ${studentName}*\n`;
+  plain += `🗓️ الفترة: ${periodTitle}\n`;
+  plain += `━━━━━━━━━━━━━━━━━━━━━\n`;
+  plain += `📚 وقت الدراسة: ${formatDuration(totalStudy)}\n`;
+  plain += `☕ وقت الاستراحة: ${formatDuration(totalBreak)}\n`;
+  plain += `🛏️ وقت النوم: ${formatDuration(totalSleep)}\n`;
+  plain += `⭐ مجموع النقاط: ${totalPoints} نقطة\n`;
+  plain += `🎯 المهام المنجزة: ${doneAchieves.length} من ${doneAchieves.length + pendingAchieves.length}\n`;
+
+  if (doneAchieves.length > 0) {
+    plain += `\n✅ *أبرز الإنجازات:*\n`;
+    doneAchieves.slice(0, 10).forEach(a => {
+      plain += `• ${a.text}\n`;
+    });
+  }
+
+  if (studySessions.length > 0) {
+    plain += `\n📝 *جلسات الدراسة:*\n`;
+    studySessions.slice(0, 8).forEach(s => plain += formatSessionText(s) + '\n');
+  }
+  if (breakSessions.length > 0) {
+    plain += `\n☕ *جلسات الاستراحة:*\n`;
+    breakSessions.slice(0, 8).forEach(s => plain += formatSessionText(s) + '\n');
+  }
+  if (sleepSessions.length > 0) {
+    plain += `\n🛏️ *جلسات النوم:*\n`;
+    sleepSessions.slice(0, 8).forEach(s => plain += formatSessionText(s) + '\n');
+  }
+
+  plain += `\n✨ تم التوليد بواسطة منصة إنجاز`;
+  currentGeneratedReportText = plain;
+
+  const renderSessionHtml = (s, color) => {
+    const startStr = s.start ? formatTime(s.start) : '';
+    const endStr = s.end ? formatTime(s.end) : '';
+    const timeRange = (startStr && endStr) ? `من ${startStr} إلى ${endStr}` : (startStr ? `بدأت: ${startStr}` : '');
+    const det = s.details ? escapeHtml(s.details) : '';
+    return `
+      <div style="font-size:0.82em;background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:8px 10px;border-radius:8px;display:flex;flex-direction:column;gap:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div>
+            <b>${formatDuration(s.minutes)}</b>
+            ${timeRange ? `<span style="color:var(--text-dim);font-size:0.9em;margin-right:6px;">(${timeRange})</span>` : ''}
+          </div>
+          ${s.date ? `<span style="color:var(--text-dim);font-size:0.75em;">${formatDateArabic(s.date).split(' ')[0]}</span>` : ''}
+        </div>
+        ${det ? `<div style="color:${color};font-size:0.85em;border-right:2px solid ${color};padding-right:8px;margin-right:2px;">${det}</div>` : ''}
+      </div>
+    `;
+  };
+
+  body.innerHTML = `
+    <div style="display:flex;justify-content:center;gap:8px;margin-bottom:16px;">
+      <button type="button" class="btn ${isDay ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="setReportScope('day')">تقرير اليوم</button>
+      <button type="button" class="btn ${!isDay ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="setReportScope('week')">تقرير الأسبوع</button>
+    </div>
+
+    <div class="card" style="background:var(--card-bg, rgba(255,255,255,0.04));border:1px solid var(--border);padding:14px;border-radius:12px;margin-bottom:14px;">
+      <div style="font-size:1.15em;font-weight:700;color:var(--text);margin-bottom:4px;">👤 ${escapeHtml(studentName)}</div>
+      <div style="font-size:0.85em;color:var(--text-dim);">🗓️ ${periodTitle}</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:10px;margin-bottom:16px;">
+      <div class="stat-card" style="padding:10px;">
+        <div class="stat-label">📚 دراسة</div>
+        <div class="stat-value" style="font-size:1.25em;color:var(--primary);">${formatDuration(totalStudy)}</div>
+      </div>
+      <div class="stat-card" style="padding:10px;">
+        <div class="stat-label">☕ استراحة</div>
+        <div class="stat-value" style="font-size:1.25em;color:var(--secondary);">${formatDuration(totalBreak)}</div>
+      </div>
+      <div class="stat-card" style="padding:10px;">
+        <div class="stat-label">🛏️ نوم</div>
+        <div class="stat-value" style="font-size:1.25em;color:var(--success);">${formatDuration(totalSleep)}</div>
+      </div>
+      <div class="stat-card" style="padding:10px;">
+        <div class="stat-label">⭐ نقاط</div>
+        <div class="stat-value" style="font-size:1.25em;color:var(--warning);">${totalPoints}</div>
+      </div>
+    </div>
+
+    ${doneAchieves.length > 0 ? `
+      <div style="margin-bottom:14px;">
+        <div style="font-size:0.9em;font-weight:bold;margin-bottom:8px;color:var(--success);">✅ المهام المنجزة (${doneAchieves.length})</div>
+        <ul style="list-style:none;padding:0;margin:0;display:flex;flex-direction:column;gap:6px;">
+          ${doneAchieves.map(a => `
+            <li style="display:flex;align-items:center;gap:8px;font-size:0.85em;background:rgba(0,255,136,0.06);border:1px solid rgba(0,255,136,0.15);padding:6px 10px;border-radius:8px;">
+              <span style="color:var(--success);">✓</span>
+              <span>${escapeHtml(a.text)}</span>
+            </li>
+          `).join('')}
+        </ul>
+      </div>
+    ` : '<div style="font-size:0.85em;color:var(--text-dim);margin-bottom:12px;">لا توجد مهام منجزة في هذه الفترة بعد.</div>'}
+
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      ${studySessions.length > 0 ? `
+        <div>
+          <div style="font-size:0.9em;font-weight:bold;margin-bottom:8px;color:var(--primary);">📝 جلسات الدراسة (${studySessions.length})</div>
+          <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px;">
+            ${studySessions.map(s => renderSessionHtml(s, 'var(--primary)')).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      ${breakSessions.length > 0 ? `
+        <div>
+          <div style="font-size:0.9em;font-weight:bold;margin-bottom:8px;color:var(--secondary);">☕ جلسات الاستراحة (${breakSessions.length})</div>
+          <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px;">
+            ${breakSessions.map(s => renderSessionHtml(s, 'var(--secondary)')).join('')}
+          </div>
+        </div>
+      ` : ''}
+
+      ${sleepSessions.length > 0 ? `
+        <div>
+          <div style="font-size:0.9em;font-weight:bold;margin-bottom:8px;color:var(--success);">🛏️ جلسات النوم (${sleepSessions.length})</div>
+          <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px;">
+            ${sleepSessions.map(s => renderSessionHtml(s, 'var(--success)')).join('')}
+          </div>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
+async function copyReportText() {
+  if (!currentGeneratedReportText) return;
+  const ok = await copyToClipboard(currentGeneratedReportText);
+  if (ok) toast('تم نسخ التقرير بنجاح! جاهز للصق والمشاركة ✓', 'success');
+  else toast('تعذّر النسخ تلقائياً', 'error');
+}
+
+function shareReportWhatsApp() {
+  if (!currentGeneratedReportText) return;
+  const url = `https://api.whatsapp.com/send?text=${encodeURIComponent(currentGeneratedReportText)}`;
+  window.open(url, '_blank');
 }
 
 document.addEventListener('DOMContentLoaded', init);

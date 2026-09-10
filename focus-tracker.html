@@ -33,6 +33,7 @@
         <button type="button" class="settings-tab" data-tab="injaz">من إنجاز</button>
         <button type="button" class="settings-tab" data-tab="bonuses">البونسات</button>
         <button type="button" class="settings-tab" data-tab="ranks">الرتب</button>
+        <button type="button" class="settings-tab" data-tab="rank-styles">🎨 أشكال الرتب (5 تصاميم)</button>
         <button type="button" class="settings-tab" data-tab="data">البيانات</button>
       </div>
 
@@ -100,7 +101,7 @@
             <div id="newBonusStagesList" class="stage-chip-list"></div>
             <label class="bonus-affects-label">
               <input type="checkbox" id="bonusAffectsPoints">
-              <span>⚡ يضرب نقاط اليوم — إذا فعّلتها، عنوان كل مرحلة نفسه هو رقم المضاعف (مثلاً اكتب "1.5" أو "2")، يتصفر تلقائياً كل يوم جديد</span>
+              <span>⚡ يجمع لنقاط اليوم — إذا فعّلتها، عنوان كل مرحلة هو رقم البونس (مثلاً "1.2" أو "1.5")، وينجمعن مع بعض بدل الضرب، ويتصفرن تلقائياً كل يوم جديد</span>
             </label>
             <button type="button" id="bonusCreateBtn" class="qa-btn qa-btn-primary qa-btn-full">إنشاء</button>
           </div>
@@ -120,6 +121,13 @@
             <button type="button" id="saveRanksBtn" class="qa-btn qa-btn-primary">💾 حفظ العتبات</button>
             <button type="button" id="resetRanksBtn" class="qa-btn qa-btn-secondary">↺ رجوع للافتراضي</button>
           </div>
+        </div>
+
+        <!-- أشكال الرتب (5 تصاميم لكل رتبة) -->
+        <div class="settings-pane" data-pane="rank-styles">
+          <div class="qa-title">🎨 تخصيص أشكال الرتب (5 تصاميم لكل رتبة)</div>
+          <span class="form-hint">اختر التصميم المفضل لديك لكل رتبة — يتطبق فوراً في لوحة التحكم والشريط العلوي وكل الواجهات.</span>
+          <div id="rankStylesGallery" class="rank-styles-gallery"></div>
         </div>
 
         <!-- البيانات -->
@@ -157,6 +165,7 @@
 };
 </script>
 <script type="module" src="js/firebase-bridge.js"></script>
+<script src="js/rank-svgs.js"></script>
 <script src="js/focus-tracker.js"></script>
 </body>
 </html>

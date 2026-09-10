@@ -110,7 +110,7 @@ body[data-goal-level="3"]::after{ opacity:1; animation: ambient-fire-pulse 3.4s 
 .dayend-pill{ display:flex; align-items:center; gap:6px; background: var(--bg-elevated-2); border:1px solid var(--border); color: var(--text-muted); font-size:.76rem; padding:6px 12px; border-radius: var(--radius-pill); cursor:pointer; transition: all var(--t-fast) var(--ease-out); }
 .dayend-pill:hover{ border-color: var(--border-strong); color: var(--text); }
 .dayend-pill svg{ width:14px; height:14px; flex-shrink:0; }
-.topbar-actions{ display:flex; align-items:center; gap: var(--space-2); }
+.topbar-actions{ display:flex; align-items:center; gap: var(--space-2); flex-wrap: nowrap; flex-shrink: 0; }
 
 /* ============ الأزرار ============ */
 .btn{ display:inline-flex; align-items:center; justify-content:center; gap:8px; border:none; cursor:pointer; font-weight:700; font-size:.92rem;
@@ -129,7 +129,10 @@ body[data-goal-level="3"]::after{ opacity:1; animation: ambient-fire-pulse 3.4s 
 .btn-danger:hover{ background: color-mix(in srgb, var(--danger) 26%, transparent); }
 .btn-sm{ padding: 7px 14px; font-size:.8rem; }
 .btn-block{ width:100%; }
-.btn-icon{ width:42px; height:42px; padding:0; border-radius:50%; background: var(--bg-elevated-3); color: var(--text-muted); border:1px solid var(--border); }
+.btn-icon{ display: inline-flex; align-items: center; justify-content: center; width:42px; height:42px; padding:0; border-radius:50%; background: var(--bg-elevated-3); color: var(--text-muted); border:1px solid var(--border); flex-shrink: 0; text-decoration: none; cursor: pointer; }
+.btn-icon [data-icon]{ display: inline-flex; align-items: center; justify-content: center; width:20px; height:20px; margin: auto; }
+.btn-icon svg:not(.rank-svg){ width:20px; height:20px; display: block; margin: auto; }
+.btn-icon [data-icon] svg{ width:20px; height:20px; display: block; margin: auto; }
 .btn-icon:hover{ color: var(--text); background: var(--bg-elevated-2); }
 .btn-icon.active{ background: var(--primary); color: var(--primary-ink); }
 .btn[disabled]{ opacity:.45; cursor:not-allowed; filter:none; transform:none; box-shadow:none; }
@@ -432,6 +435,44 @@ body[data-goal-level="3"]::after{ opacity:1; animation: ambient-fire-pulse 3.4s 
 /* ============ عناصر متفرقة إضافية ============ */
 .timer-controls{ display:flex; flex-direction:column; align-items:center; gap:8px; width:100%; }
 
+.visitors-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: var(--radius-full, 999px);
+  font-size: 0.78rem;
+  font-weight: 600;
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all var(--t-fast) var(--ease-out);
+  white-space: nowrap;
+  user-select: none;
+}
+.visitors-pill:hover {
+  background: var(--bg-surface-hover, var(--bg-elevated));
+  border-color: var(--border-strong);
+  color: var(--text);
+  transform: translateY(-1px);
+}
+.visitor-pulse-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  display: inline-block;
+  flex-shrink: 0;
+  transition: background var(--t-fast), box-shadow var(--t-fast);
+}
+.visitor-pulse-dot.active {
+  background: var(--success);
+  box-shadow: 0 0 8px var(--success);
+  animation: blink 1.8s ease-in-out infinite;
+}
+
 .sync-dot-mini{ width:9px; height:9px; border-radius:50%; display:inline-block; flex-shrink:0; }
 .sync-dot-mini.ok{ background: var(--success); }
 .sync-dot-mini.pending{ background: var(--warning); animation: blink 1s ease-in-out infinite; }
@@ -620,7 +661,9 @@ body[data-goal-level="3"]::after{ opacity:1; animation: ambient-fire-pulse 3.4s 
 @media (max-width: 880px){
   .stats-grid{ grid-template-columns: repeat(2,1fr); }
   .tracker-grid{ grid-template-columns: 1fr; }
-  .progress-wrap{ grid-template-columns: 1fr; justify-items:center; text-align:center; }
+  .progress-wrap{ grid-template-columns: 1fr; justify-items:center; text-align:center; gap: var(--space-4); }
+  .progress-side{ width: 100%; }
+  .points-orb{ margin: 0 auto; }
   .form-group-row{ grid-template-columns: 1fr; }
   .theme-swatches{ grid-template-columns: 1fr; }
 }

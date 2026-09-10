@@ -408,6 +408,20 @@ function toggleThemePopover(force){
   pop.classList.toggle('show', willShow);
 }
 
+function reportVisitorEntry(){
+  try{
+    const lastPing = sessionStorage.getItem('injaz_visitor_ping_time');
+    const now = Date.now();
+    if(lastPing && (now - parseInt(lastPing, 10) < 45000)) return;
+    sessionStorage.setItem('injaz_visitor_ping_time', String(now));
+    fetch('/api/visit', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ referrer: document.referrer || 'direct' })
+    }).catch(() => {});
+  }catch(e){}
+}
+
 /* -------------------- الإقلاع -------------------- */
 function init(){
   hydrateIcons();
@@ -422,8 +436,12 @@ function init(){
   setInterval(renderViewerTimeline, 60000);
 
   startFirebaseListener();
+  reportVisitorEntry();
   document.addEventListener('visibilitychange', () => {
-    if(document.visibilityState === 'visible') startFirebaseListener();
+    if(document.visibilityState === 'visible') {
+      startFirebaseListener();
+      reportVisitorEntry();
+    }
   });
 
   function closeAnyModal(id){ if(id === 'modal-day') closeDayModal(); else closeModal(id); }

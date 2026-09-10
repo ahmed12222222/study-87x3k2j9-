@@ -53,9 +53,13 @@
         <span id="dayend-countdown">—</span>
       </button>
       <div class="topbar-actions">
-        <a href="review.html" class="btn-icon" title="المراجعات والامتحانات" aria-label="المراجعات والامتحانات"><span data-icon="target"></span></a><a href="focus-tracker.html" class="btn-icon" title="Focus Tracker" aria-label="Focus Tracker">
-  <span id="ftBadgeAdmin" data-ft-badge></span>
-</a>
+        <button type="button" class="visitors-pill" id="visitors-pill" onclick="showVisitorsNotice()" title="حركة زوار الموقع اليوم (بدون أسماء)" aria-label="زوار الموقع اليوم">
+          <span class="visitor-pulse-dot" aria-hidden="true"></span>
+          <span id="visitors-count-text">الزوار: --</span>
+        </button>
+        <a href="review.html" class="btn-icon" title="المراجعات والامتحانات" aria-label="المراجعات والامتحانات"><span data-icon="target"></span></a>
+        <a href="focus-tracker.html" class="btn-icon ft-badge-btn" id="ftBadgeAdmin" data-ft-badge title="Focus Tracker" aria-label="Focus Tracker"></a>
+        <button type="button" class="btn-icon" id="btn-report" onclick="openReportModal()" title="تقرير الإنجاز" aria-label="تقرير الإنجاز"><span data-icon="chart"></span></button>
         <span class="sync-dot-mini off" id="sync-dot-mini" title="حالة المزامنة"></span>
         <button type="button" class="btn-icon" onclick="openSettings()" title="الإعدادات" aria-label="الإعدادات"><span data-icon="settings"></span></button>
       </div>
@@ -323,6 +327,29 @@
   </div>
 </div>
 
+<!-- لوحة تقرير الإنجاز والدراسة -->
+<div class="modal-overlay" id="modal-report" role="dialog" aria-modal="true">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <h3 class="modal-title" style="display:flex;align-items:center;gap:8px;">
+        <span data-icon="chart"></span>
+        <span>تقرير الإنجاز والدراسة</span>
+      </h3>
+      <button type="button" class="icon-btn" onclick="closeModal('modal-report')" aria-label="إغلاق"><span data-icon="x"></span></button>
+    </div>
+    <div class="modal-body" id="modal-report-body" style="max-height:70vh;overflow-y:auto;">
+      <!-- محتوى التقرير يُبنى ديناميكياً -->
+    </div>
+    <div class="modal-foot" style="display:flex;justify-content:space-between;flex-wrap:wrap;gap:8px;">
+      <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <button type="button" class="btn btn-primary btn-sm" onclick="copyReportText()"><span data-icon="copy"></span><span>نسخ التقرير للنشر</span></button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="shareReportWhatsApp()"><span data-icon="whatsapp"></span><span>مشاركة واتساب</span></button>
+      </div>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('modal-report')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
 <!-- لوحة الإعدادات -->
 <div class="modal-overlay" id="modal-settings" role="dialog" aria-modal="true">
   <div class="modal modal-lg">
@@ -333,6 +360,7 @@
     <div class="modal-body">
       <div class="settings-tabs">
         <button type="button" class="settings-tab" data-tab="appearance" onclick="switchSettingsTab('appearance')">المظهر</button>
+        <button type="button" class="settings-tab" data-tab="rank-styles" onclick="switchSettingsTab('rank-styles')">أشكال الرتب (5 تصاميم)</button>
         <button type="button" class="settings-tab" data-tab="goals" onclick="switchSettingsTab('goals')">الأهداف والنقاط</button>
         <button type="button" class="settings-tab" data-tab="sync" onclick="switchSettingsTab('sync')">المشاركة مع العائلة</button>
         <button type="button" class="settings-tab" data-tab="advanced" onclick="switchSettingsTab('advanced')">متقدم</button>
@@ -383,6 +411,14 @@
             <button type="button" data-mode="light" onclick="setCustomMode('light')">فاتح</button>
             <button type="button" data-mode="dark" onclick="setCustomMode('dark')">غامق</button>
           </div>
+        </div>
+      </div>
+
+      <div class="settings-pane" id="pane-rank-styles">
+        <div class="form-group">
+          <label class="form-label" style="font-weight:bold;font-size:1.05rem;">🎨 أشكال وتصاميم الرتب (Focus Tracker)</label>
+          <span class="form-hint" style="margin-bottom:10px;">اختر من بين 5 تصاميم فريدة لكل رتبة — اختيارك يتطبق فوراً في الأيقونة العلوية وفي لوحة Focus Tracker كاملة.</span>
+          <div id="adminRankStylesGallery" class="rank-styles-gallery"></div>
         </div>
       </div>
 
@@ -487,6 +523,7 @@
 };
 </script>
 <script type="module" src="js/firebase-bridge.js"></script>
+<script src="js/rank-svgs.js"></script>
 <script src="js/focus-tracker-badge.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/shared.js"></script>

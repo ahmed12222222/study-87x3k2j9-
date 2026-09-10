@@ -512,14 +512,28 @@ function buildDashboardHtml(state) {
         rnkTextClass  = 'fire-text';
     }
 
+    const rankSvg = (typeof window !== 'undefined' && window.RankSvgs && window.RankSvgs.get) ? window.RankSvgs.get(rank.label, 76) : '';
+    const fxDecor = (typeof window !== 'undefined' && window.RankSvgs && window.RankSvgs.getDecor) ? window.RankSvgs.getDecor(rank.label) : '';
+    const lbl = String(rank.label||'').toLowerCase();
+    let rnkFxClass = '';
+    if(lbl.includes('machine')) rnkFxClass = 'fx-machine';
+    else if(lbl.includes('unreal')) rnkFxClass = 'fx-unreal';
+    else if(lbl.includes('champion')) rnkFxClass = 'fx-champion';
+    else if(lbl.includes('elite')) rnkFxClass = 'fx-elite';
+    else if(lbl.includes('diamond')) rnkFxClass = 'fx-diamond';
+    else if(lbl.includes('plat')) rnkFxClass = 'fx-platinum';
+
     const rankCardHTML = `
     <div class="rnk ${rnkExtraClass}" style="${rnkStyle}">
         ${rnkDecor}
-        <div class="rnk-inner">
-            <div style="font-size:1.35em;color:${rank.color};" class="${rnkTextClass}">${rank.icon} [${rank.label}]</div>
-            <div style="margin-top:10px;font-size:0.88em;font-weight:normal;color:#ddd;line-height:1.7;">${rank.msg}</div>
-            <div style="margin-top:12px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.07);font-size:0.78em;color:#666;">
-                ${nextRankBlockResult}
+        <div class="rnk-inner" style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;">
+            ${rankSvg ? `<div class="rnk-badge-media ${rnkFxClass}" style="flex-shrink:0;">${fxDecor}${rankSvg}</div>` : ''}
+            <div style="flex:1;min-width:200px;">
+                <div style="font-size:1.35em;color:${rank.color};" class="${rnkTextClass}">${rank.icon} [${rank.label}]</div>
+                <div style="margin-top:8px;font-size:0.88em;font-weight:normal;color:#ddd;line-height:1.7;">${rank.msg}</div>
+                <div style="margin-top:10px;padding-top:10px;border-top:1px solid rgba(255,255,255,0.07);font-size:0.78em;color:#888;">
+                    ${nextRankBlockResult}
+                </div>
             </div>
         </div>
     </div>`;
@@ -579,11 +593,12 @@ function buildDashboardHtml(state) {
             const r      = pts >= (MACHINE_THRESHOLD) ? {label:'THE MACHINE', color:'#00FF41', icon:'👁️'} : getWeekRank(pts);
             const pct    = Math.min(pts / MAX_WEEK * 100, 100);
             const { rowBg, badgeCss } = getRowTierStyle(r.label, r.color);
+            const rSvg = (typeof window !== 'undefined' && window.RankSvgs && window.RankSvgs.get) ? window.RankSvgs.get(r.label, 20) : r.icon;
             return `<tr${rowBg}>
                 <td style="padding:6px 10px;text-align:right;color:#aaa;font-size:0.82em;">${wStart.format('DD/MM')} — ${wEnd.format('DD/MM/YY')}</td>
-                <td style="padding:5px 8px;text-align:center;color:#FFD700;font-weight:bold;">${Math.floor(pts)}</td>
+                <td style="padding:5px 8px;text-align:center;color:#FFD700;font-weight:bold;">≈ ${Math.round(pts / 10) * 10}</td>
                 <td style="padding:5px 8px;text-align:center;color:${pColor(pct)};font-size:0.82em;">${pct.toFixed(0)}%</td>
-                <td style="${badgeCss}">${r.icon} ${r.label}</td>
+                <td style="${badgeCss};display:inline-flex;align-items:center;gap:6px;">${rSvg} ${r.label}</td>
             </tr>`;
         }).join('');
 
@@ -596,13 +611,24 @@ function buildDashboardHtml(state) {
             const r   = getMonthRank(pts);
             const pct = Math.min(pts / MAX_MONTH * 100, 100);
             const { rowBg, badgeCss } = getRowTierStyle(r.label, r.color);
+            const rSvg = (typeof window !== 'undefined' && window.RankSvgs && window.RankSvgs.get) ? window.RankSvgs.get(r.label, 20) : r.icon;
             return `<tr${rowBg}>
                 <td style="padding:6px 10px;text-align:right;color:#aaa;">${MONTHS_AR[parseInt(mo)-1]} ${yr}</td>
-                <td style="padding:5px 8px;text-align:center;color:#FFD700;font-weight:bold;">${Math.floor(pts)}</td>
+                <td style="padding:5px 8px;text-align:center;color:#FFD700;font-weight:bold;">≈ ${Math.round(pts / 100) * 100}</td>
                 <td style="padding:5px 8px;text-align:center;color:${pColor(pct)};font-size:0.82em;">${pct.toFixed(0)}%</td>
-                <td style="${badgeCss}">${r.icon} ${r.label}</td>
+                <td style="${badgeCss};display:inline-flex;align-items:center;gap:6px;">${rSvg} ${r.label}</td>
             </tr>`;
         }).join('');
+
+    // تقريب الأرقام في الفوكس تراكر حسب طلب المستخدم:
+    // اليوم: عادي (Math.floor(dayTotal))
+    // الأسبوع: يتقرب إلى 10 مع (≈)
+    // الشهر: يتقرب إلى 100 مع (≈)
+    const approxWeek = Math.round(weekTotal / 10) * 10;
+    const approxMonth = Math.round(monthTotal / 100) * 100;
+    const approxLastWeek = Math.round(lastWeekTotal / 10) * 10;
+    const approxWeekDiff = Math.round(weekDiff / 10) * 10;
+    const approxProjected = Math.round(projectedWeek / 10) * 10;
 
     return `
 <div class="ftb ${ftbExtraClass}">
@@ -616,18 +642,18 @@ function buildDashboardHtml(state) {
 
   <div class="g3">
     <div class="card"><div class="cv" style="color:${pColor(dayPct)};">${Math.floor(dayTotal)}</div><div class="cl">⚡ اليوم</div></div>
-    <div class="card"><div class="cv" style="color:${pColor(weekPct)};">${Math.floor(weekTotal)}</div><div class="cl">🏆 الأسبوع</div></div>
-    <div class="card"><div class="cv" style="color:#aa88ff;">${Math.floor(monthTotal)}</div><div class="cl">📅 الشهر</div></div>
+    <div class="card"><div class="cv" style="color:${pColor(weekPct)};">≈ ${approxWeek}</div><div class="cl">🏆 الأسبوع</div></div>
+    <div class="card"><div class="cv" style="color:#aa88ff;">≈ ${approxMonth}</div><div class="cl">📅 الشهر</div></div>
   </div>
 
   <div class="sec">
     <div class="prow"><span>⚡ اليوم: ${Math.floor(dayTotal)} / ${dynamicDailyTarget} ${debtWarning}${multiplierBadge}</span><span style="color:${pColor(dayPct)};font-weight:bold;">${dayPct.toFixed(1)}%</span></div>
     <div class="trk"><div style="height:100%;width:${dayPct}%;background:linear-gradient(90deg,#00B4DB,#0083B0);border-radius:20px;"></div></div>
 
-    <div class="prow"><span>🏆 الأسبوع: ${Math.floor(weekTotal)} / ${MAX_WEEK}</span><span style="color:${pColor(weekPct)};font-weight:bold;">${weekPct.toFixed(1)}%</span></div>
+    <div class="prow"><span>🏆 الأسبوع: ≈ ${approxWeek} / ${MAX_WEEK}</span><span style="color:${pColor(weekPct)};font-weight:bold;">${weekPct.toFixed(1)}%</span></div>
     <div class="trk"><div style="height:100%;width:${weekPct}%;background:linear-gradient(90deg,#FF6B00,#FFD700);border-radius:20px;"></div></div>
 
-    <div class="prow"><span>📅 الشهر: ${Math.floor(monthTotal)} / ${MAX_MONTH}</span><span style="color:#aa88ff;font-weight:bold;">${monthPct.toFixed(1)}%</span></div>
+    <div class="prow"><span>📅 الشهر: ≈ ${approxMonth} / ${MAX_MONTH}</span><span style="color:#aa88ff;font-weight:bold;">${monthPct.toFixed(1)}%</span></div>
     <div class="trk" style="margin-bottom:0;"><div style="height:100%;width:${monthPct}%;background:linear-gradient(90deg,#8E2DE2,#4A00E0);border-radius:20px;"></div></div>
   </div>
 
@@ -638,9 +664,9 @@ function buildDashboardHtml(state) {
 
   <div class="g2">
     <div class="card"><div class="cv" style="color:#ff6b6b;">🔥 ${streak}</div><div class="cl">أيام متتالية</div></div>
-    <div class="card"><div class="cv" style="color:${weekDiff>=0?'#00ff88':'#ff5555'};">${weekDiff>=0?'+':''}${Math.floor(weekDiff)}</div><div class="cl">مقارنة الأسبوع الماضي (${Math.floor(lastWeekTotal)})</div></div>
+    <div class="card"><div class="cv" style="color:${weekDiff>=0?'#00ff88':'#ff5555'};">${approxWeekDiff>=0?'+':''}${approxWeekDiff}</div><div class="cl">مقارنة الأسبوع الماضي (≈ ${approxLastWeek})</div></div>
     <div class="card"><div class="cv" style="color:#00BFFF;">📊 ${dailyAvg}</div><div class="cl">معدل يومي</div></div>
-    <div class="card"><div class="cv" style="color:#FFD700;">🎯 ${projectedWeek}</div><div class="cl">التوقع بنهاية الأسبوع</div></div>
+    <div class="card"><div class="cv" style="color:#FFD700;">🎯 ≈ ${approxProjected}</div><div class="cl">التوقع بنهاية الأسبوع</div></div>
   </div>
 
   ${bestPts > 0 ? `<div class="sec" style="text-align:center;font-size:0.85em;">🌟 <strong style="color:#FFD700;">أفضل يوم هذا الأسبوع:</strong> ${bestDay} — ${bestPts} نقطة</div>` : ''}
@@ -784,13 +810,22 @@ function bonusStageMultiplier(b) {
     return Math.round(parsed * 100) / 100; // نقربها لمنزلتين عشان ما تصير كسور عائمة غريبة
 }
 
-// مضاعف نقاط اليوم: كل بونس مفعّل عليه "يأثر بالنقاط" يساهم برقمه الحالي (bonusStageMultiplier)،
-// وكل هذي الأرقام تنضرب مع بعض. القيمة الافتراضية (بدون أي بونس مفعّل أو كلهن بالصفر) = ×1.
+// مضاعف نقاط اليوم: الأساس هو 1، ونجمع عليه الزيادات الإضافية فقط من كل بونس.
+// مثلاً: بونس 1.3 يعطي (+0.3) وبونس 1.6 يعطي (+0.6) => المجموع: 1 + 0.3 + 0.6 = 1.9 بالضبط (مو 2.9).
 function getActiveMultiplier(data) {
     const src = data || appData;
-    const scoring = (src.bonuses || []).filter(b => b.affectsPoints);
-    if (scoring.length === 0) return 1;
-    return scoring.reduce((mult, b) => mult * bonusStageMultiplier(b), 1);
+    const active = (src.bonuses || []).filter(b => b.affectsPoints && b.currentStage > 0);
+    if (active.length === 0) return 1;
+    let totalExtra = 0;
+    for (const b of active) {
+        const mult = bonusStageMultiplier(b);
+        if (typeof mult === 'number' && mult > 0) {
+            const extra = mult >= 1 ? (mult - 1) : mult;
+            totalExtra += extra;
+        }
+    }
+    const finalMult = 1 + totalExtra;
+    return Math.round(finalMult * 100) / 100;
 }
 
 function deleteBonus(id) {
@@ -1074,17 +1109,23 @@ function renderRankEditor() {
     const mEl = document.getElementById('rankEditorMonth');
     if (!wEl || !mEl) return;
 
-    wEl.innerHTML = currentRanks.map((r, i) => `
+    wEl.innerHTML = currentRanks.map((r, i) => {
+        const svg = (typeof window !== 'undefined' && window.RankSvgs && window.RankSvgs.get) ? window.RankSvgs.get(r.label, 22) : r.icon;
+        return `
         <div class="rank-edit-row">
-            <span class="rank-edit-icon" style="color:${r.color};">${r.icon} ${r.label}</span>
+            <span class="rank-edit-icon" style="color:${r.color};display:inline-flex;align-items:center;gap:6px;">${svg} ${r.label}</span>
             <input type="number" class="rank-edit-input" min="0" step="1" value="${r.min}" data-idx="${i}" data-scope="week">
-        </div>`).join('');
+        </div>`;
+    }).join('');
 
-    mEl.innerHTML = currentMonthRanks.map((r, i) => `
+    mEl.innerHTML = currentMonthRanks.map((r, i) => {
+        const svg = (typeof window !== 'undefined' && window.RankSvgs && window.RankSvgs.get) ? window.RankSvgs.get(r.label, 22) : r.icon;
+        return `
         <div class="rank-edit-row">
-            <span class="rank-edit-icon" style="color:${r.color};">${r.icon} ${r.label}</span>
+            <span class="rank-edit-icon" style="color:${r.color};display:inline-flex;align-items:center;gap:6px;">${svg} ${r.label}</span>
             <input type="number" class="rank-edit-input" min="0" step="1" value="${r.min}" data-idx="${i}" data-scope="month">
-        </div>`).join('');
+        </div>`;
+    }).join('');
 }
 
 function saveRankThresholds() {
@@ -1114,6 +1155,59 @@ function resetRankThresholds() {
     render();
 }
 
+function renderRankStylesGallery() {
+    if (typeof document === 'undefined') return;
+    const gallery = document.getElementById('rankStylesGallery');
+    if (!gallery || !window.RankSvgs || !window.RankSvgs.TIERS) return;
+
+    const tiers = window.RankSvgs.TIERS;
+    gallery.innerHTML = tiers.map(tier => {
+        const selected = window.RankSvgs.getSelectedVariant(tier.key);
+        const variants = window.RankSvgs.getAllVariants(tier.key);
+
+        const variantsHtml = variants.map(v => {
+            const isSel = (v.id === selected);
+            const svgStr = v.svg(56);
+            const fxClass = ['platinum','diamond','elite','champion','unreal','machine'].includes(tier.key) ? `fx-${tier.key}` : '';
+            const fxDecor = (window.RankSvgs && window.RankSvgs.getDecor) ? window.RankSvgs.getDecor(tier.key) : '';
+            return `
+            <div class="variant-card ${isSel ? 'active' : ''}" data-tier="${tier.key}" data-variant="${v.id}" style="--tier-color:${tier.color};">
+                ${isSel ? '<span class="variant-active-badge">✓ مفعّل</span>' : ''}
+                <div class="variant-preview ${fxClass}">${fxDecor}${svgStr}</div>
+                <div class="variant-title">${escapeHtml(v.name)}</div>
+                <div class="variant-desc">${escapeHtml(v.desc)}</div>
+            </div>`;
+        }).join('');
+
+        return `
+        <div class="tier-style-card" style="border-right: 3px solid ${tier.color};">
+            <div class="tier-style-head">
+                <div class="tier-style-title" style="color:${tier.color};">
+                    <span>${tier.arName} (${tier.label})</span>
+                </div>
+                <span class="tier-style-badge">التصميم الحالي: شكل ${selected}</span>
+            </div>
+            <div class="tier-variants-grid">
+                ${variantsHtml}
+            </div>
+        </div>`;
+    }).join('');
+
+    gallery.querySelectorAll('.variant-card').forEach(card => {
+        card.addEventListener('click', () => {
+            const tierKey = card.dataset.tier;
+            const vId = parseInt(card.dataset.variant, 10);
+            window.RankSvgs.setSelectedVariant(tierKey, vId);
+            renderRankStylesGallery();
+            render();
+            renderRankEditor();
+            if (typeof toast === 'function') {
+                toast(`تم تفعيل شكل ${vId} لرتبة ${tierKey} بنجاح ✓`);
+            }
+        });
+    });
+}
+
 function refreshAll() {
     checkDailyBonusReset();
     refreshSubjectDatalist();
@@ -1122,6 +1216,7 @@ function refreshAll() {
     renderBonuses();
     renderReadonlyBonuses();
     renderRankEditor();
+    renderRankStylesGallery();
 }
 
 if (typeof document !== 'undefined') {
@@ -1181,11 +1276,29 @@ if (typeof document !== 'undefined') {
             settingsOverlay.addEventListener('click', (e) => { if (e.target === settingsOverlay) closeSettingsModal(); });
         }
 
+        function switchSettingsTab(tab) {
+            document.querySelectorAll('.settings-tab').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+            document.querySelectorAll('.settings-pane').forEach(p => p.classList.toggle('active', p.dataset.pane === tab));
+            if (tab === 'rank-styles') {
+                renderRankStylesGallery();
+            }
+        }
+
+        const dashboardEl = document.getElementById('dashboard');
+        if (dashboardEl) {
+            dashboardEl.addEventListener('click', (e) => {
+                const btn = e.target.closest('#openRankStylesBtn');
+                if (btn) {
+                    openSettingsModal();
+                    switchSettingsTab('rank-styles');
+                }
+            });
+        }
+
         document.querySelectorAll('.settings-tab').forEach(tabBtn => {
             tabBtn.addEventListener('click', () => {
                 const tab = tabBtn.dataset.tab;
-                document.querySelectorAll('.settings-tab').forEach(b => b.classList.toggle('active', b === tabBtn));
-                document.querySelectorAll('.settings-pane').forEach(p => p.classList.toggle('active', p.dataset.pane === tab));
+                switchSettingsTab(tab);
             });
         });
 

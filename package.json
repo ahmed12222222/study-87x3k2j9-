@@ -1,0 +1,15 @@
+{
+  "name": "injaz-study-tracker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "لوحة متابعة مباشرة لتقدم الدراسة والإنجازات اليومية",
+  "main": "server.js",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "echo 'Static app ready'"
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

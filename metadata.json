@@ -1,0 +1,8 @@
+{
+  "name": "إنجاز — لوحة المتابعة",
+  "description": "لوحة متابعة مباشرة لتقدم الدراسة والإنجازات اليومية",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
