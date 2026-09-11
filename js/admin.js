@@ -731,9 +731,22 @@ function toggleAchievement(id, dayKey){
   const a = day.achievements.find(x => x.id === id);
   if(!a) return;
   a.done = !a.done;
+
+  // مزامنة مع StudyVault — إذا كان الإنجاز مرتبط بمحاضرة
+  if (a.studyVaultRef && typeof svMarkLectureDone === 'function') {
+    if (a.done) {
+      svMarkLectureDone(a.studyVaultRef.subjectId, a.studyVaultRef.chapter, a.studyVaultRef.lecture);
+      toast(`✓ تم تعليم المحاضرة كمنجزة في StudyVault`, 'success');
+    } else {
+      svUnmarkLectureDone(a.studyVaultRef.subjectId, a.studyVaultRef.chapter, a.studyVaultRef.lecture);
+    }
+  }
+
   persist();
   renderAchievements();
   renderStats();
+  if (typeof renderSvWeeklyGoalsWidget === 'function') renderSvWeeklyGoalsWidget();
+
   const stats = computeStats(day, DATA.settings);
   if(a.done && stats.totalCount > 0 && stats.doneCount === stats.totalCount){
     confettiBurst();
@@ -764,6 +777,7 @@ function renderAchievements(){
       <li class="achieve-item ${a.done ? 'done' : ''}">
         <button class="achieve-check ${a.done ? 'done' : ''}" onclick="toggleAchievement('${a.id}','${a.dayKey || currentDayKey}')" title="تم الإنجاز؟">${ICONS.check}</button>
         ${!isDay ? `<span class="day-tag">${formatDayLabel(a.dayKey)}</span>` : ''}
+        ${a.studyVaultRef ? `<span class="sv-item-tag" style="color:${a.studyVaultRef.color || 'var(--primary)'};border-color:${a.studyVaultRef.color || 'var(--primary)'}">📚 ${escapeHtml(a.studyVaultRef.subjectName || 'StudyVault')}</span>` : ''}
         <span class="achieve-text">${escapeHtml(a.text)}</span>
         <button class="icon-btn danger" title="حذف" onclick="deleteAchievement('${a.id}','${a.dayKey || currentDayKey}')">${ICONS.trash}</button>
       </li>
@@ -775,6 +789,7 @@ function renderAchievements(){
   animateCountUp(document.getElementById('progress-percent-num'), stats.percentage, { suffix: '%' });
   const hintEl = document.getElementById('progress-hint');
   if(hintEl) hintEl.textContent = stats.totalCount > 0 ? `أنجزت ${stats.doneCount} من ${stats.totalCount}` : (isDay ? 'ضيف أهدافك اليوم عشان نحسب النسبة' : `ما اكو أهداف ${periodWord}`);
+  if (typeof renderSvWeeklyGoalsWidget === 'function') renderSvWeeklyGoalsWidget();
   animateCountUp(document.getElementById('points-value'), stats.points);
 }
 
@@ -930,6 +945,120 @@ function saveAdminPin(){
   local.adminPin = val || null;
   saveLocalConfig(local);
   toast(val ? 'تم تفعيل قفل الدخول ✓' : 'تم إلغاء قفل الدخول', 'success');
+}
+
+function exportFullSystemBackup() {
+  const svData = (() => {
+    try {
+      const raw = localStorage.getItem('sv_state_v3');
+      return raw ? JSON.parse(raw) : null;
+    } catch { return null; }
+  })();
+
+  const ftSessions = (() => {
+    try {
+      const raw = localStorage.getItem('ft_sessions_v1');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  })();
+
+  const ftBadges = (() => {
+    try {
+      const raw = localStorage.getItem('ft_badges_v1');
+      return raw ? JSON.parse(raw) : [];
+    } catch { return []; }
+  })();
+
+  const ftRankOverride = localStorage.getItem('ft_rank_override_v1') || null;
+
+  const fullBackup = {
+    backupType: 'injaz_full_system_v1',
+    exportedAt: new Date().toISOString(),
+    injaz: DATA,
+    studyvault: svData,
+    focusTracker: {
+      sessions: ftSessions,
+      badges: ftBadges,
+      rankOverride: ftRankOverride
+    }
+  };
+
+  const blob = new Blob([JSON.stringify(fullBackup, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `injaz-complete-backup-${todayKey()}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  toast('تم تنزيل نسخة احتياطية شاملة لكل شيء ✓', 'success');
+}
+
+function importFullSystemBackupFile(fileInput) {
+  const file = fileInput.files && fileInput.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (e) => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if (!parsed || typeof parsed !== 'object') throw new Error('الملف فارغ أو غير صالح');
+
+      let restoredCount = 0;
+
+      // 1. Injaz data
+      if (parsed.injaz) {
+        DATA = mergeWithDefaults(parsed.injaz);
+        saveData(DATA);
+        applyTheme(DATA.settings);
+        renderAll();
+        renderBrandName();
+        renderSettingsAppearance();
+        restoredCount++;
+      } else if (parsed.days || parsed.sessions || parsed.settings) {
+        DATA = mergeWithDefaults(parsed);
+        saveData(DATA);
+        applyTheme(DATA.settings);
+        renderAll();
+        renderBrandName();
+        renderSettingsAppearance();
+        restoredCount++;
+      }
+
+      // 2. StudyVault data
+      if (parsed.studyvault && typeof parsed.studyvault === 'object') {
+        localStorage.setItem('sv_state_v3', JSON.stringify(parsed.studyvault));
+        if (window.FirebaseSync && typeof window.FirebaseSync.write === 'function') {
+          window.FirebaseSync.write('studyvault_data', parsed.studyvault).catch(() => {});
+        }
+        restoredCount++;
+      }
+
+      // 3. FocusTracker data
+      if (parsed.focusTracker) {
+        if (parsed.focusTracker.sessions) {
+          localStorage.setItem('ft_sessions_v1', JSON.stringify(parsed.focusTracker.sessions));
+        }
+        if (parsed.focusTracker.badges) {
+          localStorage.setItem('ft_badges_v1', JSON.stringify(parsed.focusTracker.badges));
+        }
+        if (parsed.focusTracker.rankOverride) {
+          localStorage.setItem('ft_rank_override_v1', parsed.focusTracker.rankOverride);
+        }
+        restoredCount++;
+      }
+
+      if (restoredCount === 0) {
+        throw new Error('لم يتم العثور على بيانات صالحة في الملف');
+      }
+
+      toast('تم استرجاع النسخة الاحتياطية الشاملة بنجاح ✓', 'success');
+    } catch (err) {
+      toast('فشل الاستيراد: ' + err.message, 'error');
+    }
+  };
+  reader.readAsText(file);
+  fileInput.value = '';
 }
 
 function exportData(){
@@ -1144,9 +1273,30 @@ let lastVisitsData = null;
 
 async function fetchTodayVisits(isFirstLoad = false) {
   try {
-    const res = await fetch('/api/visits/today');
-    if (!res.ok) return;
-    const data = await res.json();
+    let data = null;
+    try {
+      const res = await fetch('/api/visits/today');
+      if (res.ok) {
+        data = await res.json();
+      }
+    } catch {}
+
+    // Fallback: إذا الموقع مرفوع على GitHub Pages (بدون خادم Node.js /api)، نقرأ من Firebase مباشرة
+    if (!data && window.FirebaseSync && typeof window.FirebaseSync.readOnce === 'function') {
+      const fbVisits = await window.FirebaseSync.readOnce(`site_visits/${todayKey()}`).catch(() => null);
+      if (fbVisits && typeof fbVisits === 'object') {
+        const entries = Object.values(fbVisits);
+        data = {
+          count: entries.length,
+          lastVisitTime: entries[entries.length - 1]?.time || null,
+          history: entries
+        };
+      } else {
+        data = { count: 0, lastVisitTime: null, history: [] };
+      }
+    }
+
+    if (!data) return;
     lastVisitsData = data;
     const count = Number(data.count || 0);
     const pill = document.getElementById('visitors-pill');
@@ -1413,3 +1563,79 @@ function shareReportWhatsApp() {
 }
 
 document.addEventListener('DOMContentLoaded', init);
+
+// === FULL BACKUP FUNCTIONS ===
+function exportFullBackup() {
+  const fullBackup = {
+    appVersion: "1.6",
+    timestamp: new Date().toISOString(),
+    data: {
+      injaz: JSON.parse(localStorage.getItem('injaz_data_v1') || 'null'),
+      focusTracker: JSON.parse(localStorage.getItem('focusTrackerData_v1') || 'null'),
+      studyVault: JSON.parse(localStorage.getItem('sv_state_v3') || 'null')
+    }
+  };
+  
+  const str = JSON.stringify(fullBackup, null, 2);
+  const blob = new Blob([str], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `injaz-full-backup-${new Date().toISOString().split('T')[0]}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+function importFullBackupFile(input) {
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const parsed = JSON.parse(e.target.result);
+      if(!parsed.data) throw new Error('Invalid Backup Format');
+      
+      if(parsed.data.injaz) localStorage.setItem('injaz_data_v1', JSON.stringify(parsed.data.injaz));
+      if(parsed.data.focusTracker) localStorage.setItem('focusTrackerData_v1', JSON.stringify(parsed.data.focusTracker));
+      if(parsed.data.studyVault) localStorage.setItem('sv_state_v3', JSON.stringify(parsed.data.studyVault));
+      
+      // Reload main DATA object
+      if (typeof defaultData === 'function') {
+         DATA = parsed.data.injaz || defaultData();
+         applyTheme(DATA.settings);
+         renderAll();
+         renderBrandName();
+      }
+      
+      closeModal('modal-settings');
+      toast('تم استيراد النسخة الشاملة بنجاح ✓', 'success');
+      
+      // Trigger storage event so other scripts know about the update
+      window.dispatchEvent(new Event('storage'));
+      
+    } catch(err) {
+      toast('ملف النسخة الشاملة غير صالح', 'error');
+    }
+  };
+  reader.readAsText(file);
+  input.value = '';
+}
+
+function copyFullBackupToClipboard() {
+  const fullBackup = {
+    appVersion: "1.6",
+    timestamp: new Date().toISOString(),
+    data: {
+      injaz: JSON.parse(localStorage.getItem('injaz_data_v1') || 'null'),
+      focusTracker: JSON.parse(localStorage.getItem('focusTrackerData_v1') || 'null'),
+      studyVault: JSON.parse(localStorage.getItem('sv_state_v3') || 'null')
+    }
+  };
+  
+  const str = JSON.stringify(fullBackup);
+  navigator.clipboard.writeText(str).then(() => {
+    toast('تم نسخ كود النسخة الشاملة!', 'success');
+  }).catch(() => {
+    toast('تعذر النسخ، جرب تنزيل الملف', 'error');
+  });
+}

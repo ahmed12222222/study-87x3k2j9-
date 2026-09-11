@@ -57,6 +57,7 @@
           <span class="visitor-pulse-dot" aria-hidden="true"></span>
           <span id="visitors-count-text">الزوار: --</span>
         </button>
+        <a href="studyvault.html" class="btn-icon" title="StudyVault — متتبع الدراسة" aria-label="StudyVault"><span data-icon="book"></span></a>
         <a href="review.html" class="btn-icon" title="المراجعات والامتحانات" aria-label="المراجعات والامتحانات"><span data-icon="target"></span></a>
         <a href="focus-tracker.html" class="btn-icon ft-badge-btn" id="ftBadgeAdmin" data-ft-badge title="Focus Tracker" aria-label="Focus Tracker"></a>
         <button type="button" class="btn-icon" id="btn-report" onclick="openReportModal()" title="تقرير الإنجاز" aria-label="تقرير الإنجاز"><span data-icon="chart"></span></button>
@@ -258,6 +259,9 @@
 
     <form class="achieve-input-row" id="achieve-form">
       <input type="text" class="form-input" id="achieve-input" placeholder="شنو تريد تنجز اليوم؟" maxlength="140">
+      <button type="button" class="sv-achieve-btn" id="btn-pick-sv-lecture" onclick="openStudyVaultPicker()" title="اختيار محاضرة من متتبع الدراسة StudyVault" aria-label="اختيار محاضرة من StudyVault">
+        <span data-icon="book"></span>
+      </button>
       <button type="submit" class="btn btn-primary" aria-label="إضافة إنجاز"><span data-icon="plus"></span></button>
     </form>
 
@@ -277,6 +281,9 @@
         <span class="lbl">نقطة</span>
       </div>
     </div>
+
+    <!-- أهدافي الأسبوعية من StudyVault جوه إنجازات اليوم -->
+    <div id="sv-weekly-goals-container"></div>
   </section>
 
   <footer class="app-footer reveal" style="animation-delay:.3s">
@@ -486,12 +493,29 @@
           <span class="form-hint">قفل بسيط يمنع أي حد يفتح جهازك من الدخول للوحة مباشرة — تنبيه: مو تشفير حقيقي، بس رادع بسيط.</span>
           <button type="button" class="btn btn-secondary btn-sm" style="align-self:flex-start" onclick="saveAdminPin()">حفظ القفل</button>
         </div>
-        <div class="form-group">
-          <label class="form-label">نسخة احتياطية من بياناتك</label>
+        <div class="form-group" style="background:var(--card-bg, rgba(255,255,255,0.03)); padding:12px; border-radius:10px; border:1px solid var(--border-subtle, rgba(255,255,255,0.08));">
+          <label class="form-label" style="font-weight:700; color:var(--primary, #7c4dff); display:flex; align-items:center; gap:6px;">
+            <span>📦</span><span>نسخة احتياطية شاملة (لكل شيء)</span>
+          </label>
+          <span class="form-hint" style="margin-bottom:10px; display:block; font-size:0.75rem;">
+            تضم كل بياناتك دفعة واحدة: إنجاز وجلساته، ومواد StudyVault ومحاضراته وملازمه، وإحصائيات متتبع التركيز.
+          </span>
           <div style="display:flex; gap:8px; flex-wrap:wrap;">
-            <button type="button" class="btn btn-secondary btn-sm" onclick="exportData()"><span data-icon="download"></span><span>تصدير</span></button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="exportFullSystemBackup()">
+              <span data-icon="download"></span><span>تنزيل نسخة شاملة للكل</span>
+            </button>
             <label class="btn btn-secondary btn-sm" style="cursor:pointer">
-              <span data-icon="upload"></span><span>استيراد</span>
+              <span data-icon="upload"></span><span>استيراد شامل للكل</span>
+              <input type="file" accept="application/json" style="display:none" onchange="importFullSystemBackupFile(this)">
+            </label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">نسخة احتياطية لبيانات إنجاز فقط</label>
+          <div style="display:flex; gap:8px; flex-wrap:wrap;">
+            <button type="button" class="btn btn-secondary btn-sm" onclick="exportData()"><span data-icon="download"></span><span>تصدير إنجاز</span></button>
+            <label class="btn btn-secondary btn-sm" style="cursor:pointer">
+              <span data-icon="upload"></span><span>استيراد إنجاز</span>
               <input type="file" accept="application/json" style="display:none" onchange="importDataFile(this)">
             </label>
           </div>
@@ -503,6 +527,45 @@
           </div>
           <button type="button" class="btn btn-danger btn-sm" onclick="resetAllData()"><span data-icon="trash"></span><span>تصفير</span></button>
         </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- مودال اختيار محاضرة من StudyVault -->
+<div class="modal-overlay" id="modal-sv-picker" role="dialog" aria-modal="true">
+  <div class="modal" style="max-width:480px">
+    <div class="modal-head">
+      <h3 class="modal-title" style="display:flex;align-items:center;gap:8px;">
+        <span data-icon="book" style="display:inline-flex;width:20px;height:20px;"></span>
+        <span>اختيار محاضرة من StudyVault</span>
+      </h3>
+      <button type="button" class="icon-btn" onclick="closeStudyVaultPicker()" aria-label="إغلاق"><span data-icon="x"></span></button>
+    </div>
+    <div class="modal-body">
+      <div class="form-group">
+        <label class="form-label">1. اختر المادة</label>
+        <div class="sv-picker-chips-row" id="sv-picker-subjects"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">2. اختر الفصل</label>
+        <div class="sv-picker-chips-row" id="sv-picker-chapters"></div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">3. اختر المحاضرة لإنجاز اليوم</label>
+        <div class="sv-picker-lec-grid" id="sv-picker-lectures"></div>
+      </div>
+      <div class="sv-picker-preview-box" id="sv-picker-preview">--</div>
+    </div>
+    <div class="modal-foot" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
+      <a href="studyvault.html" class="btn btn-secondary btn-sm" target="_blank" style="text-decoration:none">
+        <span data-icon="book"></span><span>فتح StudyVault</span>
+      </a>
+      <div style="display:flex;gap:8px;">
+        <button type="button" class="btn btn-secondary btn-sm" onclick="closeStudyVaultPicker()">إلغاء</button>
+        <button type="button" class="btn btn-primary btn-sm" onclick="confirmAddSvLectureToAchievements()">
+          <span data-icon="plus"></span><span>إضافة لإنجازات اليوم</span>
+        </button>
       </div>
     </div>
   </div>
@@ -527,6 +590,7 @@
 <script src="js/focus-tracker-badge.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/shared.js"></script>
+<script src="js/studyvault-bridge.js"></script>
 <script src="js/admin.js"></script>
 </body>
 </html>

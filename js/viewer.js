@@ -414,11 +414,24 @@ function reportVisitorEntry(){
     const now = Date.now();
     if(lastPing && (now - parseInt(lastPing, 10) < 45000)) return;
     sessionStorage.setItem('injaz_visitor_ping_time', String(now));
+
+    // 1. خادم Node.js المحلي (في حال التشغيل كخادم محلي)
     fetch('/api/visit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ referrer: document.referrer || 'direct' })
     }).catch(() => {});
+
+    // 2. مزامنة سحابية مع Firebase مباشرة (تضمن عمل عداد الزوار على GitHub Pages بدون الحاجة لخادم Node.js)
+    if(window.FirebaseSync && typeof window.FirebaseSync.write === 'function') {
+      const vId = 'v_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+      const timeStr = new Date().toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
+      window.FirebaseSync.write(`site_visits/${todayKey()}/${vId}`, {
+        time: timeStr,
+        timestamp: Date.now(),
+        referrer: document.referrer || 'direct'
+      }).catch(() => {});
+    }
   }catch(e){}
 }
 
