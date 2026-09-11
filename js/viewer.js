@@ -408,29 +408,50 @@ function toggleThemePopover(force){
   pop.classList.toggle('show', willShow);
 }
 
-function reportVisitorEntry(){
+async function reportVisitorEntry(){
   try{
-    const lastPing = sessionStorage.getItem('injaz_visitor_ping_time');
     const now = Date.now();
-    if(lastPing && (now - parseInt(lastPing, 10) < 45000)) return;
+    const lastPing = sessionStorage.getItem('injaz_visitor_ping_time');
+    // منع التكرار اللحظي خلال 6 ثواني فقط
+    if(lastPing && (now - parseInt(lastPing, 10) < 6000)) return;
     sessionStorage.setItem('injaz_visitor_ping_time', String(now));
+
+    let vId = sessionStorage.getItem('injaz_session_vid');
+    if(!vId){
+      vId = 'v_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7);
+      sessionStorage.setItem('injaz_session_vid', vId);
+    }
 
     // 1. خادم Node.js المحلي (في حال التشغيل كخادم محلي)
     fetch('/api/visit', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ referrer: document.referrer || 'direct' })
+      body: JSON.stringify({ visitorId: vId, referrer: document.referrer || 'direct' })
     }).catch(() => {});
 
     // 2. مزامنة سحابية مع Firebase مباشرة (تضمن عمل عداد الزوار على GitHub Pages بدون الحاجة لخادم Node.js)
-    if(window.FirebaseSync && typeof window.FirebaseSync.write === 'function') {
-      const vId = 'v_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
-      const timeStr = new Date().toLocaleTimeString('ar-IQ', { hour: '2-digit', minute: '2-digit' });
-      window.FirebaseSync.write(`site_visits/${todayKey()}/${vId}`, {
-        time: timeStr,
-        timestamp: Date.now(),
-        referrer: document.referrer || 'direct'
-      }).catch(() => {});
+    const cfg = getEffectiveFirebaseConfig();
+    if(cfg && cfg.databaseURL){
+      try{
+        await ensureFirebaseInitialized(cfg);
+        if(window.FirebaseSync && typeof window.FirebaseSync.signInAnon === 'function'){
+          await window.FirebaseSync.signInAnon().catch(() => {});
+        }
+        if(window.FirebaseSync && typeof window.FirebaseSync.write === 'function'){
+          const timeStr = new Date().toLocaleTimeString('ar-IQ', {
+            timeZone: 'Asia/Baghdad',
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: true
+          });
+          const tKey = todayKey();
+          await window.FirebaseSync.write(`site_visits/${tKey}/${vId}`, {
+            time: timeStr,
+            timestamp: Date.now(),
+            referrer: document.referrer || 'direct'
+          });
+        }
+      }catch(fbErr){}
     }
   }catch(e){}
 }

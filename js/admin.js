@@ -1240,7 +1240,7 @@ function init(){
   if(DATA.activeTimer) startTickInterval();
   checkRemoteOnLoad();
   fetchTodayVisits(true);
-  setInterval(() => fetchTodayVisits(false), 25000);
+  setInterval(() => fetchTodayVisits(false), 7000);
 
   document.getElementById('achieve-form').addEventListener('submit', (e) => { e.preventDefault(); addAchievement(); });
   document.getElementById('manualform-study').addEventListener('submit', (e) => { e.preventDefault(); submitManualEntry('study'); });
@@ -1273,27 +1273,44 @@ let lastVisitsData = null;
 
 async function fetchTodayVisits(isFirstLoad = false) {
   try {
-    let data = null;
+    let serverData = null;
     try {
       const res = await fetch('/api/visits/today');
       if (res.ok) {
-        data = await res.json();
+        serverData = await res.json();
       }
     } catch {}
 
-    // Fallback: إذا الموقع مرفوع على GitHub Pages (بدون خادم Node.js /api)، نقرأ من Firebase مباشرة
-    if (!data && window.FirebaseSync && typeof window.FirebaseSync.readOnce === 'function') {
-      const fbVisits = await window.FirebaseSync.readOnce(`site_visits/${todayKey()}`).catch(() => null);
-      if (fbVisits && typeof fbVisits === 'object') {
-        const entries = Object.values(fbVisits);
-        data = {
-          count: entries.length,
-          lastVisitTime: entries[entries.length - 1]?.time || null,
-          history: entries
-        };
-      } else {
-        data = { count: 0, lastVisitTime: null, history: [] };
-      }
+    // فحص Firebase أيضاً سواء على GitHub Pages أو مع الخادم المحلي
+    let fbData = null;
+    const cfg = getEffectiveFirebaseConfig();
+    if (cfg && cfg.databaseURL) {
+      try {
+        await ensureFirebaseInitialized(cfg);
+        if (window.FirebaseSync && typeof window.FirebaseSync.readOnce === 'function') {
+          const fbVisits = await window.FirebaseSync.readOnce(`site_visits/${todayKey()}`).catch(() => null);
+          if (fbVisits && typeof fbVisits === 'object') {
+            const entries = Object.values(fbVisits);
+            fbData = {
+              count: entries.length,
+              lastVisitTime: entries[entries.length - 1]?.time || null,
+              history: entries
+            };
+          }
+        }
+      } catch {}
+    }
+
+    let data = null;
+    if (serverData && fbData) {
+      const maxCount = Math.max(Number(serverData.count || 0), Number(fbData.count || 0));
+      data = {
+        count: maxCount,
+        lastVisitTime: fbData.lastVisitTime || serverData.lastVisitTime || null,
+        history: (fbData.history && fbData.history.length > 0) ? fbData.history : (serverData.history || [])
+      };
+    } else {
+      data = serverData || fbData;
     }
 
     if (!data) return;

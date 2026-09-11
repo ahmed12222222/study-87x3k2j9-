@@ -59,14 +59,17 @@ function getTodayVisits() {
 }
 
 function recordVisit(req = null) {
+  const bodyVid = req && req.body && req.body.visitorId ? String(req.body.visitorId) : null;
   const ip = req ? (req.headers['x-forwarded-for'] || req.socket.remoteAddress || 'unknown').split(',')[0].trim() : 'direct';
+  const trackerKey = bodyVid ? `vid_${bodyVid}` : `ip_${ip}`;
   const now = Date.now();
-  const lastTime = recentVisitors.get(ip);
-  if (lastTime && (now - lastTime < 45000)) {
+  const lastTime = recentVisitors.get(trackerKey);
+  // منع التكرار اللحظي (5 ثواني فقط) حتى لا يمنع الاختبار المتكرر أو الزائر الذي يعود بعد قليل
+  if (lastTime && (now - lastTime < 5000)) {
     return getTodayVisits();
   }
-  recentVisitors.set(ip, now);
-  if (recentVisitors.size > 200) {
+  recentVisitors.set(trackerKey, now);
+  if (recentVisitors.size > 500) {
     for (const [k, v] of recentVisitors.entries()) {
       if (now - v > 3600000) recentVisitors.delete(k);
     }
@@ -106,10 +109,7 @@ app.get('/api/visits/today', (req, res) => {
   });
 });
 
-// Serve static assets from root directory
-app.use(express.static(path.join(__dirname)));
-
-// Route aliases for clean URLs
+// Clean route aliases BEFORE express.static
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
 });
@@ -123,13 +123,16 @@ app.get('/review', (req, res) => {
 });
 
 // Index page route - tracks visitor entry
-app.get('/', (req, res) => {
+app.get(['/', '/index.html'], (req, res) => {
   const accept = req.headers['accept'] || '';
   if (accept.includes('text/html')) {
     recordVisit(req);
   }
   res.sendFile(path.join(__dirname, 'index.html'));
 });
+
+// Serve static assets from root directory
+app.use(express.static(path.join(__dirname)));
 
 // Fallback to index.html
 app.get('*', (req, res) => {
