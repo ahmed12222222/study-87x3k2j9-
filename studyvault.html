@@ -7,6 +7,19 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;500;600;700&family=Cairo:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<script>
+window.INJAZ_FIREBASE_CONFIG = {
+  apiKey: "AIzaSyCb1GU-Vyn5WoRQf0Ad91ebKOLlDCyUG8I",
+  authDomain: "injaz-78e0d.firebaseapp.com",
+  databaseURL: "https://injaz-78e0d-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId: "injaz-78e0d",
+  storageBucket: "injaz-78e0d.firebasestorage.app",
+  messagingSenderId: "638503212154",
+  appId: "1:638503212154:web:49880a39c447c9120857c3",
+  measurementId: "G-WQ6MM13KWH"
+};
+</script>
+<script type="module" src="js/firebase-bridge.js"></script>
 <style>
 /* ═══════════════════════════════════════════════
    TOKENS
@@ -1733,52 +1746,110 @@ function saveState() {
   scheduleFirebasePush();
 }
 
+async function ensureStudyVaultFirebase() {
+  const cfg = window.INJAZ_FIREBASE_CONFIG;
+  if (!cfg || !cfg.databaseURL) {
+    throw new Error('إعدادات Firebase غير متوفرة');
+  }
+
+  // انتظر جاهزية جسر Firebase إذا لم يكن جاهزاً بعد
+  if (!window.FirebaseSync) {
+    await new Promise((resolve, reject) => {
+      if (window.FirebaseSync) return resolve();
+      const onReady = () => {
+        window.removeEventListener('firebase-bridge-ready', onReady);
+        resolve();
+      };
+      window.addEventListener('firebase-bridge-ready', onReady);
+      setTimeout(() => {
+        window.removeEventListener('firebase-bridge-ready', onReady);
+        if (window.FirebaseSync) resolve();
+        else reject(new Error('جاري تحميل مكتبة Firebase، يرجى المحاولة بعد لحظات'));
+      }, 4000);
+    });
+  }
+
+  // تهيئة Firebase
+  const ok = window.FirebaseSync.init(cfg);
+  if (!ok && !window.FirebaseSync) {
+    throw new Error('فشلت تهيئة اتصال Firebase');
+  }
+
+  // تسجيل الدخول المجهول للكتابة في قاعدة البيانات
+  if (typeof window.FirebaseSync.signInAnon === 'function') {
+    try {
+      await window.FirebaseSync.signInAnon();
+    } catch (authErr) {
+      console.warn('Firebase anon sign-in note:', authErr);
+    }
+  }
+
+  return window.FirebaseSync;
+}
+
 function scheduleFirebasePush() {
-  if (typeof window === 'undefined' || !window.FirebaseSync) return;
   clearTimeout(fbStudyVaultTimer);
-  fbStudyVaultTimer = setTimeout(() => {
-    window.FirebaseSync.write('studyvault_data', STATE)
-      .then(() => {
-        const el = document.getElementById('fb-sync-status-line');
-        if (el) el.textContent = '☁️ محفوظ بالسحابة في Firebase ✓';
-      })
-      .catch(err => {
-        console.warn('Firebase StudyVault write error:', err);
-      });
-  }, 1000);
+  fbStudyVaultTimer = setTimeout(async () => {
+    try {
+      if (!window.INJAZ_FIREBASE_CONFIG) return;
+      const fb = await ensureStudyVaultFirebase();
+      await fb.write('studyvault_data', STATE);
+      const el = document.getElementById('fb-sync-status-line');
+      const dot = document.getElementById('sync-dot');
+      if (el) el.textContent = '☁️ محفوظ بالسحابة في Firebase ✓';
+      if (dot) dot.className = 'sync-dot ok';
+    } catch (err) {
+      console.warn('Firebase StudyVault auto-push note:', err);
+    }
+  }, 1200);
 }
 
 async function fbPushStudyVault() {
   const el = document.getElementById('fb-sync-status-line');
-  if (el) el.textContent = '⏳ جاري الرفع لـ Firebase...';
+  const dot = document.getElementById('sync-dot');
+  if (el) { el.textContent = '⏳ جاري الاتصال والرفع لـ Firebase...'; el.style.color = 'var(--gold)'; }
+  if (dot) dot.className = 'sync-dot busy';
+
   try {
-    if (!window.FirebaseSync) throw new Error('Firebase غير متصل بعد');
-    await window.FirebaseSync.write('studyvault_data', STATE);
-    if (el) el.textContent = '✅ تم رفع البيانات إلى Firebase بنجاح!';
-    toast('تم حفظ بياناتك في Firebase السحابي بنجاح', 'ok');
+    const fb = await ensureStudyVaultFirebase();
+    STATE.updatedAt = Date.now();
+    await fb.write('studyvault_data', STATE);
+    if (el) { el.textContent = '✅ تم رفع البيانات إلى Firebase بنجاح!'; el.style.color = 'var(--mint)'; }
+    if (dot) dot.className = 'sync-dot ok';
+    toast('تم حفظ بياناتك في Firebase السحابي بنجاح ☁️', 'ok');
   } catch (err) {
-    if (el) el.textContent = '❌ خطأ: ' + err.message;
-    toast('تعذر الرفع: ' + err.message, 'err');
+    console.error('StudyVault push error:', err);
+    const msg = err && err.message === 'NOT_INITIALIZED' ? 'لم يتم تهيئة Firebase' : (err ? err.message : 'خطأ غير معروف');
+    if (el) { el.textContent = '❌ خطأ: ' + msg; el.style.color = 'var(--coral)'; }
+    if (dot) dot.className = 'sync-dot bad';
+    toast('تعذر الرفع: ' + msg, 'bad');
   }
 }
 
 async function fbPullStudyVault() {
   const el = document.getElementById('fb-sync-status-line');
-  if (el) el.textContent = '⏳ جاري السحب من Firebase...';
+  const dot = document.getElementById('sync-dot');
+  if (el) { el.textContent = '⏳ جاري السحب من Firebase...'; el.style.color = 'var(--gold)'; }
+  if (dot) dot.className = 'sync-dot busy';
+
   try {
-    if (!window.FirebaseSync) throw new Error('Firebase غير متصل بعد');
-    const remote = await window.FirebaseSync.readOnce('studyvault_data');
-    if (!remote || !Array.isArray(remote.subjects)) {
+    const fb = await ensureStudyVaultFirebase();
+    const remote = await fb.readOnce('studyvault_data');
+    if (!remote || !Array.isArray(remote.subjects) || remote.subjects.length === 0) {
       throw new Error('لا توجد بيانات محفوظة في Firebase بعد');
     }
     STATE = remote;
-    saveState();
+    try { localStorage.setItem('sv_state_v3', JSON.stringify(STATE)); } catch {}
     render();
-    if (el) el.textContent = '✅ تم جلب أحدث نسخة من Firebase!';
-    toast('تم استرجاع بياناتك من Firebase بنجاح', 'ok');
+    if (el) { el.textContent = '✅ تم جلب أحدث نسخة من Firebase!'; el.style.color = 'var(--mint)'; }
+    if (dot) dot.className = 'sync-dot ok';
+    toast('تم استرجاع بياناتك من Firebase بنجاح ☁️', 'ok');
   } catch (err) {
-    if (el) el.textContent = '❌ خطأ: ' + err.message;
-    toast('تعذر الجلب: ' + err.message, 'err');
+    console.error('StudyVault pull error:', err);
+    const msg = err && err.message === 'NOT_INITIALIZED' ? 'لم يتم تهيئة Firebase' : (err ? err.message : 'خطأ غير معروف');
+    if (el) { el.textContent = '❌ خطأ: ' + msg; el.style.color = 'var(--coral)'; }
+    if (dot) dot.className = 'sync-dot bad';
+    toast('تعذر الجلب: ' + msg, 'bad');
   }
 }
 
@@ -2914,41 +2985,37 @@ function render() {
   }
 }
 
-function initStudyVaultFirebase() {
+async function initStudyVaultFirebase() {
   if (typeof window === 'undefined') return;
   const cfg = window.INJAZ_FIREBASE_CONFIG;
-  if (!cfg) return;
+  if (!cfg || !cfg.databaseURL) return;
 
   const setup = async () => {
-    if (!window.FirebaseSync) return;
     try {
-      window.FirebaseSync.init(cfg);
-      if (typeof window.FirebaseSync.signInAnon === 'function') {
-        await window.FirebaseSync.signInAnon().catch(() => {});
-      }
+      const fb = await ensureStudyVaultFirebase();
       const el = document.getElementById('fb-sync-status-line');
       const dot = document.getElementById('sync-dot');
-      if (el) el.textContent = '🟢 متصل بـ Firebase — جاري الفحص...';
+      if (el) { el.textContent = '🟢 متصل بـ Firebase — جاري المزامنة...'; el.style.color = 'var(--mint)'; }
       if (dot) dot.className = 'sync-dot busy';
 
-      const remote = await window.FirebaseSync.readOnce('studyvault_data');
+      const remote = await fb.readOnce('studyvault_data');
       if (remote && Array.isArray(remote.subjects) && remote.subjects.length > 0) {
         if ((remote.updatedAt || 0) > (STATE.updatedAt || 0)) {
           STATE = remote;
           try { localStorage.setItem('sv_state_v3', JSON.stringify(STATE)); } catch {}
           render();
-          if (el) el.textContent = '🟢 متصل بـ Firebase (البيانات محدثة)';
+          if (el) el.textContent = '🟢 متصل بـ Firebase (البيانات محدثة بالسحابة)';
         } else {
-          await window.FirebaseSync.write('studyvault_data', STATE);
-          if (el) el.textContent = '🟢 متصل بـ Firebase (محفوظ بالسحابة)';
+          await fb.write('studyvault_data', STATE);
+          if (el) el.textContent = '🟢 متصل بـ Firebase (تم الحفظ بالسحابة)';
         }
       } else {
-        await window.FirebaseSync.write('studyvault_data', STATE);
+        await fb.write('studyvault_data', STATE);
         if (el) el.textContent = '🟢 متصل بـ Firebase (تم رفع النسخة الأولية)';
       }
       if (dot) dot.className = 'sync-dot ok';
 
-      window.FirebaseSync.listen('studyvault_data', (remoteData) => {
+      fb.listen('studyvault_data', (remoteData) => {
         if (remoteData && Array.isArray(remoteData.subjects)) {
           if ((remoteData.updatedAt || 0) > (STATE.updatedAt || 0)) {
             STATE = remoteData;
@@ -2961,7 +3028,7 @@ function initStudyVaultFirebase() {
       console.warn('StudyVault Firebase init error:', e);
       const el = document.getElementById('fb-sync-status-line');
       const dot = document.getElementById('sync-dot');
-      if (el) el.textContent = '⚠️ لم يتم الاتصال بـ Firebase: ' + e.message;
+      if (el) { el.textContent = '⚠️ تنبيه اتصال Firebase: ' + e.message; el.style.color = 'var(--coral)'; }
       if (dot) dot.className = 'sync-dot bad';
     }
   };
@@ -2970,24 +3037,14 @@ function initStudyVaultFirebase() {
     setup();
   } else {
     window.addEventListener('firebase-bridge-ready', setup, { once: true });
+    setTimeout(() => {
+      if (window.FirebaseSync) setup();
+    }, 1500);
   }
 }
 
 render();
 initStudyVaultFirebase();
 </script>
-<script>
-window.INJAZ_FIREBASE_CONFIG = {
-  apiKey: "AIzaSyCb1GU-Vyn5WoRQf0Ad91ebKOLlDCyUG8I",
-  authDomain: "injaz-78e0d.firebaseapp.com",
-  databaseURL: "https://injaz-78e0d-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId: "injaz-78e0d",
-  storageBucket: "injaz-78e0d.firebasestorage.app",
-  messagingSenderId: "638503212154",
-  appId: "1:638503212154:web:49880a39c447c9120857c3",
-  measurementId: "G-WQ6MM13KWH"
-};
-</script>
-<script type="module" src="js/firebase-bridge.js"></script>
 </body>
 </html>
