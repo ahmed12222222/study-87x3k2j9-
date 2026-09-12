@@ -306,29 +306,117 @@ function svUnmarkLectureDone(subjectId, chapterNum, lectureNum) {
   renderSvWeeklyGoalsWidget();
 }
 
-// حساب الأهداف الأسبوعية
+// علامة صح عند إنجاز صفحات ملزمة
+function svMarkMaterialPageDone(subjectId, materialId, targetPage, fromPage) {
+  const state = getStudyVaultState();
+  const sub = (state.subjects || []).find(s => s.id === subjectId || s.name === subjectId);
+  if (!sub) return;
+
+  const materials = sub.materials || [];
+  const mat = materials.find(m => m.id === materialId) || materials[0];
+  if (mat) {
+    const prev = Number(mat.currentPage || 0);
+    const target = Number(targetPage);
+    if (target > prev) {
+      mat.currentPage = target;
+    }
+  }
+
+  const today = svTodayStr();
+  const pCount = Math.max(1, Number(targetPage) - Number(fromPage || 0));
+  state.studyLog.push({
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    date: today,
+    subjectId: sub.id,
+    materialId: materialId,
+    materialName: mat ? mat.name : 'ملزمة',
+    type: 'material_pages',
+    pagesDone: pCount,
+    targetPage: Number(targetPage)
+  });
+
+  saveStudyVaultState(state);
+  renderSvWeeklyGoalsWidget();
+}
+
+// إلغاء الصح لصفحات ملزمة
+function svUnmarkMaterialPageDone(subjectId, materialId, targetPage, prevPage) {
+  const state = getStudyVaultState();
+  const sub = (state.subjects || []).find(s => s.id === subjectId || s.name === subjectId);
+  if (!sub) return;
+
+  const materials = sub.materials || [];
+  const mat = materials.find(m => m.id === materialId) || materials[0];
+  if (mat && prevPage != null) {
+    mat.currentPage = Number(prevPage);
+  }
+
+  const today = svTodayStr();
+  const idx = state.studyLog.findIndex(en =>
+    en.date === today && en.subjectId === sub.id && en.materialId === materialId && en.type === 'material_pages'
+  );
+  if (idx !== -1) {
+    state.studyLog.splice(idx, 1);
+  }
+
+  saveStudyVaultState(state);
+  renderSvWeeklyGoalsWidget();
+}
+
+// حساب الأهداف الأسبوعية (محاضرات أو صفحات)
 function getSvWeeklyGoalsData() {
   const state = getStudyVaultState();
-  const goalSubs = (state.subjects || []).filter(s => s.weeklyGoal > 0);
+  const subjects = state.subjects || [];
   const now = new Date();
   const start = svDateStr(svStartOfWeek(now));
   const end = svDateStr(svEndOfWeek(now));
 
+  const goalSubs = subjects.filter(s => {
+    const isPageGoal = s.weeklyGoalType === 'pages' && Number(s.weeklyTargetPage) > 0;
+    const isLecGoal = (!s.weeklyGoalType || s.weeklyGoalType === 'lectures') && Number(s.weeklyGoal) > 0;
+    return isPageGoal || isLecGoal;
+  });
+
   return goalSubs.map(s => {
-    const done = (state.studyLog || []).filter(en =>
-      en.subjectId === s.id && en.date >= start && en.date <= end
-    ).length;
-    const goal = s.weeklyGoal;
-    const pct = Math.min(100, Math.round((done / goal) * 100));
-    return {
-      id: s.id,
-      name: s.name,
-      color: s.color || '#3ef5aa',
-      done,
-      goal,
-      pct,
-      isReached: done >= goal
-    };
+    if (s.weeklyGoalType === 'pages' && Number(s.weeklyTargetPage) > 0) {
+      const materials = s.materials || [];
+      const mat = materials.find(m => m.id === s.weeklyMaterialId) || materials[0] || { name: 'الملزمة', currentPage: 0, totalPages: s.weeklyTargetPage };
+      const curPage = Number(mat.currentPage || 0);
+      const targetPage = Number(s.weeklyTargetPage);
+      const pct = Math.min(100, Math.max(0, Math.round((curPage / targetPage) * 100)));
+      return {
+        id: s.id,
+        name: s.name,
+        color: s.color || '#3ef5aa',
+        goalType: 'pages',
+        materialName: mat.name,
+        materialId: mat.id,
+        curPage,
+        targetPage,
+        done: curPage,
+        goal: targetPage,
+        pct,
+        isReached: curPage >= targetPage,
+        label: `ملزمة ${mat.name}: ص ${curPage} من ${targetPage}`
+      };
+    } else {
+      const done = (state.studyLog || []).filter(en =>
+        en.subjectId === s.id && en.date >= start && en.date <= end && (!en.type || en.type === 'lecture')
+      ).length;
+      const goal = Number(s.weeklyGoal || 0);
+      const pct = Math.min(100, Math.round((done / (goal || 1)) * 100));
+      return {
+        id: s.id,
+        name: s.name,
+        color: s.color || '#3ef5aa',
+        goalType: 'lectures',
+        done,
+        goal,
+        pct,
+        isReached: done >= goal,
+        label: `${done} من ${goal} محاضرة`
+      };
+    }
   });
 }
 
@@ -348,7 +436,7 @@ function renderSvWeeklyGoalsWidget() {
           </div>
           <a href="studyvault.html" class="sv-link-badge">StudyVault ↗</a>
         </div>
-        <div class="sv-empty-hint">ما محدد أهداف أسبوعية بعد — تكدر تحدد عدد المحاضرات الأسبوعية لكل مادة من StudyVault.</div>
+        <div class="sv-empty-hint">ما محدد أهداف أسبوعية بعد — تكدر تحدد هدف محاضرات أو صفحات ملزمة لكل مادة من StudyVault.</div>
       </div>
     `;
     return;
@@ -359,11 +447,11 @@ function renderSvWeeklyGoalsWidget() {
       <div class="sv-goal-top">
         <div class="sv-goal-title-wrap">
           <span class="sv-goal-dot" style="background:${g.color};box-shadow:0 0 8px ${g.color}66"></span>
-          <span class="sv-goal-name">${escapeHtml(g.name)}</span>
+          <span class="sv-goal-name">${escapeHtml(g.name)} ${g.goalType === 'pages' ? `<small style="font-size:0.75rem;color:var(--text-muted);font-weight:normal;">(📖 ${escapeHtml(g.materialName)})</small>` : ''}</span>
         </div>
         <div class="sv-goal-score-wrap">
           ${g.isReached ? '<span class="sv-reached-badge">✓ تم الهدف</span>' : ''}
-          <span class="sv-goal-ratio" dir="ltr"><b>${g.done}</b> / ${g.goal}</span>
+          <span class="sv-goal-ratio" dir="ltr">${g.goalType === 'pages' ? `ص <b>${g.done}</b> / ${g.goal}` : `<b>${g.done}</b> / ${g.goal}`}</span>
         </div>
       </div>
       <div class="sv-goal-bar-track">
@@ -389,11 +477,75 @@ function renderSvWeeklyGoalsWidget() {
 }
 
 // ══════════════════════════════════════════════
-// MODAL: اختيار محاضرة من StudyVault
+// MODAL: اختيار هدف من StudyVault (محاضرات أو صفحات)
 // ══════════════════════════════════════════════
+let svPickerMode = 'lectures'; // 'lectures' | 'pages'
 let svPickerSelectedSubjectId = null;
 let svPickerSelectedChapter = 1;
 let svPickerSelectedLecture = null;
+let svPickerSelectedMaterialId = null;
+let svPickerPagesSubMode = 'target'; // 'target' | 'range'
+let svPickerTargetPage = 0;
+let svPickerFromPage = 1;
+let svPickerToPage = 1;
+
+function switchSvPickerMode(mode) {
+  svPickerMode = mode;
+  const tabLec = document.getElementById('sv-tab-lectures');
+  const tabPages = document.getElementById('sv-tab-pages');
+  const secLec = document.getElementById('sv-picker-lectures-section');
+  const secPages = document.getElementById('sv-picker-pages-section');
+
+  if (tabLec && tabPages) {
+    if (mode === 'lectures') {
+      tabLec.style.background = 'var(--primary)';
+      tabLec.style.color = '#000';
+      tabPages.style.background = 'transparent';
+      tabPages.style.color = 'var(--text)';
+      if (secLec) secLec.style.display = 'block';
+      if (secPages) secPages.style.display = 'none';
+    } else {
+      tabPages.style.background = 'var(--primary)';
+      tabPages.style.color = '#000';
+      tabLec.style.background = 'transparent';
+      tabLec.style.color = 'var(--text)';
+      if (secLec) secLec.style.display = 'none';
+      if (secPages) secPages.style.display = 'block';
+    }
+  }
+  renderSvPickerModalContent();
+}
+
+function setSvPagesSubMode(subMode) {
+  svPickerPagesSubMode = subMode;
+  const btnTarget = document.getElementById('sv-mode-target');
+  const btnRange = document.getElementById('sv-mode-range');
+  const boxTarget = document.getElementById('sv-box-target-mode');
+  const boxRange = document.getElementById('sv-box-range-mode');
+
+  if (btnTarget && btnRange) {
+    if (subMode === 'target') {
+      btnTarget.style.background = 'var(--primary)';
+      btnTarget.style.color = '#000';
+      btnTarget.style.border = 'none';
+      btnRange.style.background = 'transparent';
+      btnRange.style.color = 'var(--text)';
+      btnRange.style.border = '1px solid var(--border)';
+      if (boxTarget) boxTarget.style.display = 'block';
+      if (boxRange) boxRange.style.display = 'none';
+    } else {
+      btnRange.style.background = 'var(--primary)';
+      btnRange.style.color = '#000';
+      btnRange.style.border = 'none';
+      btnTarget.style.background = 'transparent';
+      btnTarget.style.color = 'var(--text)';
+      btnTarget.style.border = '1px solid var(--border)';
+      if (boxTarget) boxTarget.style.display = 'none';
+      if (boxRange) boxRange.style.display = 'block';
+    }
+  }
+  updateSvPickerPreview();
+}
 
 function openStudyVaultPicker() {
   const state = getStudyVaultState();
@@ -445,7 +597,7 @@ function renderSvPickerModalContent() {
   const subChipsContainer = document.getElementById('sv-picker-subjects');
   const chChipsContainer = document.getElementById('sv-picker-chapters');
   const lecGridContainer = document.getElementById('sv-picker-lectures');
-  const previewText = document.getElementById('sv-picker-preview');
+  const matChipsContainer = document.getElementById('sv-picker-materials');
 
   if (!subChipsContainer) return;
 
@@ -475,7 +627,7 @@ function renderSvPickerModalContent() {
   const currentSub = subjects.find(s => s.id === svPickerSelectedSubjectId) || subjects[0];
   if (!currentSub) return;
 
-  // 2. الفصول
+  // 2. الفصول (لوضع المحاضرات)
   const chaptersCount = Number(currentSub.chaptersCount) || 6;
   if (!svPickerSelectedChapter || svPickerSelectedChapter < 1 || svPickerSelectedChapter > chaptersCount) {
     svPickerSelectedChapter = currentSub.currentChapter || 1;
@@ -526,13 +678,66 @@ function renderSvPickerModalContent() {
   }
   if (lecGridContainer) lecGridContainer.innerHTML = lecHtml.join('');
 
-  // معاينة النص
-  if (previewText) {
-    previewText.innerHTML = `
-      <span style="opacity:0.8">المحاضرة المختارة:</span>
-      <b style="color:${col};margin-inline-start:6px;">${currentSub.name} — الفصل ${svPickerSelectedChapter}: محاضرة ${svPickerSelectedLecture}</b>
-    `;
+  // 4. الملازم والصفحات (لوضع الملازم)
+  const materials = currentSub.materials || [];
+  if (!svPickerSelectedMaterialId || !materials.some(m => m.id === svPickerSelectedMaterialId)) {
+    svPickerSelectedMaterialId = materials.length > 0 ? materials[0].id : null;
   }
+
+  if (matChipsContainer) {
+    if (materials.length === 0) {
+      matChipsContainer.innerHTML = `
+        <div style="font-size:0.8rem;color:var(--text-muted);padding:8px 0;">
+          ما اكو ملازم أو كتب مضافة لمادة ${escapeHtml(currentSub.name)} بعد. اضغط فوق لإضافة ملزمة.
+        </div>
+      `;
+    } else {
+      matChipsContainer.innerHTML = materials.map(m => {
+        const isSel = m.id === svPickerSelectedMaterialId;
+        return `
+          <button type="button" class="sv-picker-chip ${isSel ? 'selected' : ''}"
+            style="${isSel ? `background:${col}22;border-color:${col};color:${col}` : ''}"
+            onclick="svPickerSelectMaterial('${m.id}')">
+            <span>${m.type === 'book' ? '📕' : '📓'} ${typeof escapeHtml === 'function' ? escapeHtml(m.name) : m.name}</span>
+            <small style="font-size:10px;opacity:0.8">(${m.currentPage || 0}/${m.totalPages || 0})</small>
+          </button>
+        `;
+      }).join('');
+    }
+  }
+
+  const curMat = materials.find(m => m.id === svPickerSelectedMaterialId) || materials[0];
+  const curBadge = document.getElementById('sv-picker-cur-page-badge');
+  const targetInput = document.getElementById('sv-picker-target-page-input');
+  const fromInput = document.getElementById('sv-picker-from-page-input');
+  const toInput = document.getElementById('sv-picker-to-page-input');
+
+  if (curMat) {
+    const curP = Number(curMat.currentPage || 0);
+    const totalP = Number(curMat.totalPages || 100);
+    if (curBadge) curBadge.textContent = `صفحة ${curP} من ${totalP}`;
+
+    if (svPickerTargetPage <= 0 || svPickerTargetPage <= curP) {
+      svPickerTargetPage = Math.min(totalP, curP + 10);
+    }
+    if (targetInput) {
+      targetInput.max = totalP;
+      targetInput.value = svPickerTargetPage;
+    }
+
+    if (fromInput && (!fromInput.value || Number(fromInput.value) <= 0)) {
+      fromInput.value = curP + 1;
+      svPickerFromPage = curP + 1;
+    }
+    if (toInput && (!toInput.value || Number(toInput.value) <= 0)) {
+      toInput.value = Math.min(totalP, curP + 10);
+      svPickerToPage = Math.min(totalP, curP + 10);
+    }
+  } else {
+    if (curBadge) curBadge.textContent = 'لا توجد ملازم';
+  }
+
+  updateSvPickerPreview();
 }
 
 function svPickerSelectSubject(id) {
@@ -543,6 +748,17 @@ function svPickerSelectSubject(id) {
   const totalLec = Number((sub && sub.chapterLectures && sub.chapterLectures[svPickerSelectedChapter]) || (sub && sub.lecPerCh) || 8);
   const currentReached = Number((sub && sub.lectureProgress && sub.lectureProgress[svPickerSelectedChapter]) || 0);
   svPickerSelectedLecture = currentReached + 1 <= totalLec ? currentReached + 1 : totalLec;
+
+  const mats = (sub && sub.materials) || [];
+  svPickerSelectedMaterialId = mats.length > 0 ? mats[0].id : null;
+  if (mats.length > 0) {
+    const curP = Number(mats[0].currentPage || 0);
+    const totalP = Number(mats[0].totalPages || 100);
+    svPickerTargetPage = Math.min(totalP, curP + 10);
+    svPickerFromPage = curP + 1;
+    svPickerToPage = svPickerTargetPage;
+  }
+
   renderSvPickerModalContent();
 }
 
@@ -559,6 +775,202 @@ function svPickerSelectChapter(c) {
 function svPickerSelectLecture(l) {
   svPickerSelectedLecture = l;
   renderSvPickerModalContent();
+}
+
+function svPickerSelectMaterial(mId) {
+  svPickerSelectedMaterialId = mId;
+  const state = getStudyVaultState();
+  const sub = (state.subjects || []).find(s => s.id === svPickerSelectedSubjectId);
+  const mat = (sub && sub.materials || []).find(m => m.id === mId);
+  if (mat) {
+    const curP = Number(mat.currentPage || 0);
+    const totalP = Number(mat.totalPages || 100);
+    svPickerTargetPage = Math.min(totalP, curP + 10);
+    svPickerFromPage = curP + 1;
+    svPickerToPage = svPickerTargetPage;
+    const targetInput = document.getElementById('sv-picker-target-page-input');
+    if (targetInput) {
+      targetInput.value = svPickerTargetPage;
+      targetInput.max = totalP;
+    }
+    const fromInput = document.getElementById('sv-picker-from-page-input');
+    if (fromInput) fromInput.value = svPickerFromPage;
+    const toInput = document.getElementById('sv-picker-to-page-input');
+    if (toInput) toInput.value = svPickerToPage;
+  }
+  renderSvPickerModalContent();
+}
+
+function onSvTargetPageInputChange(val) {
+  svPickerTargetPage = Math.max(1, parseInt(val) || 1);
+  updateSvPickerPreview();
+}
+
+function onSvRangeInputChange() {
+  const fromInput = document.getElementById('sv-picker-from-page-input');
+  const toInput = document.getElementById('sv-picker-to-page-input');
+  if (fromInput) svPickerFromPage = Math.max(1, parseInt(fromInput.value) || 1);
+  if (toInput) svPickerToPage = Math.max(1, parseInt(toInput.value) || 1);
+  updateSvPickerPreview();
+}
+
+function svPickerAddQuickPages(delta) {
+  const state = getStudyVaultState();
+  const sub = (state.subjects || []).find(s => s.id === svPickerSelectedSubjectId);
+  const mat = (sub && sub.materials || []).find(m => m.id === svPickerSelectedMaterialId);
+  const curP = Number(mat ? mat.currentPage : 0);
+  const totalP = Number(mat ? mat.totalPages : 999);
+
+  let base = svPickerTargetPage > curP ? svPickerTargetPage : curP;
+  svPickerTargetPage = Math.min(totalP, base + delta);
+  const targetInput = document.getElementById('sv-picker-target-page-input');
+  if (targetInput) targetInput.value = svPickerTargetPage;
+  updateSvPickerPreview();
+}
+
+function updateSvPickerPreview() {
+  const previewText = document.getElementById('sv-picker-preview');
+  if (!previewText) return;
+
+  const state = getStudyVaultState();
+  const sub = (state.subjects || []).find(s => s.id === svPickerSelectedSubjectId);
+  if (!sub) {
+    previewText.textContent = '--';
+    return;
+  }
+  const col = sub.color || 'var(--primary)';
+
+  if (svPickerMode === 'lectures') {
+    previewText.innerHTML = `
+      <span style="opacity:0.8">المحاضرة المختارة:</span>
+      <b style="color:${col};margin-inline-start:6px;">${escapeHtml(sub.name)} — الفصل ${svPickerSelectedChapter}: محاضرة ${svPickerSelectedLecture}</b>
+    `;
+  } else {
+    const materials = sub.materials || [];
+    const mat = materials.find(m => m.id === svPickerSelectedMaterialId) || materials[0];
+    if (!mat) {
+      previewText.innerHTML = `<span style="color:var(--text-muted)">لا توجد ملزمة محددة لهذه المادة</span>`;
+      return;
+    }
+    const curP = Number(mat.currentPage || 0);
+
+    if (svPickerPagesSubMode === 'target') {
+      const diff = Math.max(0, svPickerTargetPage - curP);
+      const diffEl = document.getElementById('sv-picker-target-page-diff');
+      if (diffEl) diffEl.textContent = `(+${diff} ص)`;
+      previewText.innerHTML = `
+        <span style="opacity:0.8">هدف الملزمة المختار:</span>
+        <b style="color:${col};margin-inline-start:6px;">${escapeHtml(sub.name)} — ملزمة ${escapeHtml(mat.name)}: لحد ص ${svPickerTargetPage} ${diff > 0 ? `<small style="font-weight:normal;opacity:0.85">(${diff} صفحة جديدة)</small>` : ''}</b>
+      `;
+    } else {
+      const count = Math.max(1, svPickerToPage - svPickerFromPage + 1);
+      const rangeEl = document.getElementById('sv-picker-range-count');
+      if (rangeEl) rangeEl.textContent = `المجموع: ${count} صفحة (${svPickerFromPage} إلى ${svPickerToPage})`;
+      previewText.innerHTML = `
+        <span style="opacity:0.8">هدف الملزمة المختار:</span>
+        <b style="color:${col};margin-inline-start:6px;">${escapeHtml(sub.name)} — ملزمة ${escapeHtml(mat.name)}: ص ${svPickerFromPage} - ${svPickerToPage} <small style="font-weight:normal;opacity:0.85">(${count} صفحة)</small></b>
+      `;
+    }
+  }
+}
+
+// إضافة سريعة لملزمة جديدة من داخل المودال إذا ماكو
+function svPickerQuickAddMaterialPrompt() {
+  const state = getStudyVaultState();
+  const sub = (state.subjects || []).find(s => s.id === svPickerSelectedSubjectId);
+  if (!sub) return;
+
+  const matName = prompt(`أدخل اسم الملزمة أو الكتاب لمادة (${sub.name}):`, 'ملزمة الجزء الأول');
+  if (!matName || !matName.trim()) return;
+
+  const totalStr = prompt('كم إجمالي عدد صفحات الملزمة؟', '120');
+  const totalPages = parseInt(totalStr) || 100;
+
+  if (!sub.materials) sub.materials = [];
+  const newMat = {
+    id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    name: matName.trim(),
+    totalPages: totalPages,
+    currentPage: 0,
+    type: 'notes'
+  };
+  sub.materials.push(newMat);
+  saveStudyVaultState(state);
+
+  svPickerSelectedMaterialId = newMat.id;
+  renderSvPickerModalContent();
+  if (typeof toast === 'function') toast(`تمت إضافة الملزمة (${newMat.name}) بنجاح ✓`, 'ok');
+}
+
+// الزر الموحّد لتأكيد الإضافة لإنجازات اليوم
+function confirmAddSvItemToAchievements() {
+  if (svPickerMode === 'pages') {
+    confirmAddSvMaterialToAchievements();
+  } else {
+    confirmAddSvLectureToAchievements();
+  }
+}
+
+function confirmAddSvMaterialToAchievements() {
+  const state = getStudyVaultState();
+  const sub = (state.subjects || []).find(s => s.id === svPickerSelectedSubjectId);
+  if (!sub) {
+    if (typeof toast === 'function') toast('يرجى اختيار المادة أولاً', 'error');
+    return;
+  }
+  const materials = sub.materials || [];
+  const mat = materials.find(m => m.id === svPickerSelectedMaterialId) || materials[0];
+  if (!mat) {
+    if (typeof toast === 'function') toast('يرجى إضافة ملزمة للمادة أولاً', 'error');
+    return;
+  }
+
+  const curP = Number(mat.currentPage || 0);
+  let text = '';
+  let targetPage = svPickerTargetPage;
+  let fromPage = curP;
+
+  if (svPickerPagesSubMode === 'target') {
+    targetPage = Number(document.getElementById('sv-picker-target-page-input')?.value || svPickerTargetPage);
+    if (targetPage <= 0) targetPage = curP + 5;
+    const diff = Math.max(0, targetPage - curP);
+    text = `${sub.name} — ملزمة ${mat.name}: لحد ص ${targetPage}${diff > 0 ? ` (${diff} ص)` : ''}`;
+  } else {
+    fromPage = Number(document.getElementById('sv-picker-from-page-input')?.value || svPickerFromPage);
+    targetPage = Number(document.getElementById('sv-picker-to-page-input')?.value || svPickerToPage);
+    const count = Math.max(1, targetPage - fromPage + 1);
+    text = `${sub.name} — ملزمة ${mat.name}: ص ${fromPage} - ${targetPage} (${count} ص)`;
+  }
+
+  if (typeof DATA !== 'undefined' && typeof currentDayKey === 'string') {
+    const day = ensureDay(DATA, currentDayKey);
+    day.achievements.push({
+      id: uid(),
+      text: text,
+      done: false,
+      createdAt: new Date().toISOString(),
+      studyVaultRef: {
+        type: 'material_pages',
+        subjectId: sub.id,
+        subjectName: sub.name,
+        materialId: mat.id,
+        materialName: mat.name,
+        targetPage: targetPage,
+        fromPage: fromPage,
+        prevPage: curP,
+        color: sub.color
+      }
+    });
+    persist();
+    renderAchievements();
+    renderStats();
+    if (typeof toast === 'function') toast(`أضيف هدف الملزمة لإنجازات اليوم: ${text}`, 'ok');
+  } else {
+    const input = document.getElementById('achieve-input');
+    if (input) input.value = text;
+  }
+
+  closeStudyVaultPicker();
 }
 
 function confirmAddSvLectureToAchievements() {
@@ -586,6 +998,7 @@ function confirmAddSvLectureToAchievements() {
       done: false,
       createdAt: new Date().toISOString(),
       studyVaultRef: {
+        type: 'lecture',
         subjectId: sub.id,
         subjectName: sub.name,
         chapter: ch,

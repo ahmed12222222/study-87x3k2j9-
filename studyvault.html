@@ -1388,11 +1388,39 @@ input[type=range] {
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">هدف أسبوعي (محاضرات) — اتركه 0 إذا ما تريد هدف لهذي المادة</label>
-      <div class="chapters-row">
-        <div class="chapters-num" id="weekly-goal-display" style="border-color:var(--mint);color:var(--mint);box-shadow:0 0 12px rgba(62,245,170,0.3)">0</div>
-        <input type="range" min="0" max="20" value="0" id="weekly-goal-range"
-          oninput="document.getElementById('weekly-goal-display').textContent=this.value">
+      <label class="form-label">الهدف الأسبوعي للمادة</label>
+      <div style="display:flex;gap:6px;margin-bottom:10px;">
+        <button type="button" class="btn btn-sm" id="sub-goal-tab-lec" onclick="setSubjectGoalTypeModal('lectures')" style="flex:1;background:var(--mint);color:#000;font-weight:700;font-size:12px;padding:6px 10px;">🎬 بعدد المحاضرات</button>
+        <button type="button" class="btn btn-sm btn-ghost" id="sub-goal-tab-page" onclick="setSubjectGoalTypeModal('pages')" style="flex:1;font-weight:700;font-size:12px;padding:6px 10px;">📖 بصفحات ملزمة / كتاب</button>
+      </div>
+
+      <!-- خيار المحاضرات -->
+      <div id="sub-goal-lec-box">
+        <div style="font-size:11.5px;color:var(--text2);margin-bottom:6px;">كم محاضرة تريد تخلص بهذي المادة خلال الأسبوع؟ (0 = بدون هدف)</div>
+        <div class="chapters-row">
+          <div class="chapters-num" id="weekly-goal-display" style="border-color:var(--mint);color:var(--mint);box-shadow:0 0 12px rgba(62,245,170,0.3)">0</div>
+          <input type="range" min="0" max="30" value="0" id="weekly-goal-range"
+            oninput="document.getElementById('weekly-goal-display').textContent=this.value">
+        </div>
+      </div>
+
+      <!-- خيار صفحات ملزمة -->
+      <div id="sub-goal-page-box" style="display:none;background:var(--ink2);border:1px solid var(--border);border-radius:10px;padding:12px;">
+        <div class="form-group" style="margin-bottom:10px;">
+          <label class="form-label" style="font-size:12px;">الملزمة أو الكتاب المستهدف</label>
+          <select id="sub-goal-material-select" class="form-input" style="width:100%;font-size:12.5px;padding:6px 10px;background:var(--ink1);color:var(--text0);border:1px solid var(--border);border-radius:8px;" onchange="onSubGoalMaterialSelectChange()">
+          </select>
+        </div>
+        <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div>
+            <label class="form-label" style="font-size:12px;margin-bottom:2px;">الوصول لحد صفحة:</label>
+            <div style="font-size:11px;color:var(--text2);" id="sub-goal-cur-page-hint">الصفحة الحالية: 0</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <span style="font-size:12px;color:var(--text1);">لحد ص:</span>
+            <input type="number" id="sub-goal-target-page" class="form-input" min="0" max="1000" value="0" style="width:90px;text-align:center;font-weight:700;padding:6px;background:var(--ink1);color:var(--text0);border:1px solid var(--border);border-radius:8px;">
+          </div>
+        </div>
       </div>
     </div>
     <div class="form-group">
@@ -1754,7 +1782,7 @@ async function fbPullStudyVault() {
   }
 }
 
-function mkSubject({ name, chaptersCount=8, lecPerCh=8, color='#7b5ef8', instructor='', weeklyGoal=0 }={}) {
+function mkSubject({ name, chaptersCount=8, lecPerCh=8, color='#7b5ef8', instructor='', weeklyGoal=0, weeklyGoalType='lectures', weeklyMaterialId=null, weeklyTargetPage=0 }={}) {
   return {
     id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
     name, chaptersCount, lecPerCh, color, instructor,
@@ -1764,6 +1792,9 @@ function mkSubject({ name, chaptersCount=8, lecPerCh=8, color='#7b5ef8', instruc
     materials: [],
     notes: '',
     weeklyGoal,
+    weeklyGoalType,
+    weeklyMaterialId,
+    weeklyTargetPage
   };
 }
 
@@ -2194,12 +2225,16 @@ function renderMaterials(sub) {
 
   sub.materials.forEach(m => {
     const pct = m.totalPages > 0 ? (m.currentPage / m.totalPages) * 100 : 0;
+    const isWeeklyGoal = sub.weeklyGoalType === 'pages' && sub.weeklyMaterialId === m.id && (sub.weeklyTargetPage || 0) > 0;
     const item = document.createElement('div');
     item.className = 'material-item';
     item.innerHTML = `
       <div class="material-icon">${m.type === 'book' ? '📕' : '📓'}</div>
       <div class="material-info">
-        <div class="material-name">${m.name}</div>
+        <div class="material-name" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;">
+          <span>${m.name}</span>
+          ${isWeeklyGoal ? `<span style="font-size:10.5px;color:var(--mint);background:rgba(62,245,170,0.12);padding:2px 8px;border-radius:6px;border:1px solid rgba(62,245,170,0.35);font-weight:700;">🎯 هدف أسبوعي: ص ${sub.weeklyTargetPage}</span>` : ''}
+        </div>
         <div class="material-meta">صفحة ${m.currentPage} من ${m.totalPages} (${Math.round(pct)}%)</div>
         <div class="material-progress-bar">
           <div class="material-progress-fill" style="width:${pct}%;background:${sub.color};"></div>
@@ -2210,12 +2245,45 @@ function renderMaterials(sub) {
           onchange="updateMaterialPage('${m.id}', this.value)" title="تحديث الصفحة التي وصلت إليها">
       </div>
       <div class="material-actions">
+        <button class="icon-btn" onclick="quickSetMaterialWeeklyGoal('${m.id}')" title="تعيين أو تعديل كهدف أسبوعي لحد صفحة معينة" style="font-size:13px;">🎯</button>
         <button class="icon-btn" onclick="openEditMaterial('${m.id}')" title="تعديل">✏️</button>
         <button class="icon-btn danger" onclick="deleteMaterial('${m.id}')" title="حذف">🗑️</button>
       </div>
     `;
     mList.appendChild(item);
   });
+}
+
+function quickSetMaterialWeeklyGoal(mId) {
+  const sub = getSub(activeId);
+  if (!sub) return;
+  const mat = (sub.materials || []).find(m => m.id === mId);
+  if (!mat) return;
+
+  const cur = Number(mat.currentPage || 0);
+  const total = Number(mat.totalPages || 100);
+  const defaultTarget = sub.weeklyTargetPage && sub.weeklyMaterialId === mId ? sub.weeklyTargetPage : Math.min(total, cur + 15);
+  const promptVal = prompt(`🎯 تعيين الهدف الأسبوعي لملزمة (${mat.name})\nالصفحة الحالية: ${cur} من إجمالي ${total} صفحة.\n\nتريد توصل لحد صفحة كم نهاية هذا الأسبوع؟ (أدخل رقم الصفحة، أو 0 لإلغاء الهدف):`, String(defaultTarget));
+
+  if (promptVal === null) return;
+  const targetPage = parseInt(promptVal);
+  if (isNaN(targetPage) || targetPage <= 0) {
+    if (sub.weeklyMaterialId === mId && sub.weeklyGoalType === 'pages') {
+      sub.weeklyTargetPage = 0;
+      sub.weeklyGoalType = 'lectures';
+      saveState();
+      render();
+      toast('تم إلغاء الهدف الأسبوعي للملزمة', 'ok');
+    }
+    return;
+  }
+
+  sub.weeklyGoalType = 'pages';
+  sub.weeklyMaterialId = mId;
+  sub.weeklyTargetPage = Math.min(total, targetPage);
+  saveState();
+  render();
+  toast(`تم تعيين الهدف الأسبوعي: الوصول لحد صفحة ${sub.weeklyTargetPage} في ملزمة (${mat.name}) 🎯`, 'ok');
 }
 
 function updateMaterialPage(mId, val) {
@@ -2387,6 +2455,46 @@ function renderPaletteSwatches() {
   });
 }
 
+let currentSubjectModalGoalType = 'lectures';
+
+function setSubjectGoalTypeModal(type) {
+  currentSubjectModalGoalType = type;
+  const tabLec = document.getElementById('sub-goal-tab-lec');
+  const tabPages = document.getElementById('sub-goal-tab-page');
+  const boxLec = document.getElementById('sub-goal-lec-box');
+  const boxPages = document.getElementById('sub-goal-page-box');
+  if (type === 'lectures') {
+    if (tabLec) { tabLec.style.background = 'var(--mint)'; tabLec.style.color = '#000'; }
+    if (tabPages) { tabPages.style.background = 'transparent'; tabPages.style.color = 'var(--text1)'; }
+    if (boxLec) boxLec.style.display = 'block';
+    if (boxPages) boxPages.style.display = 'none';
+  } else {
+    if (tabPages) { tabPages.style.background = 'var(--mint)'; tabPages.style.color = '#000'; }
+    if (tabLec) { tabLec.style.background = 'transparent'; tabLec.style.color = 'var(--text1)'; }
+    if (boxLec) boxLec.style.display = 'none';
+    if (boxPages) boxPages.style.display = 'block';
+  }
+}
+
+function onSubGoalMaterialSelectChange() {
+  const sel = document.getElementById('sub-goal-material-select');
+  if (!sel) return;
+  const mId = sel.value;
+  const sub = editingId ? getSub(editingId) : null;
+  const mats = (sub && sub.materials) || [];
+  const mat = mats.find(m => m.id === mId) || mats[0];
+  const hint = document.getElementById('sub-goal-cur-page-hint');
+  const targetInp = document.getElementById('sub-goal-target-page');
+  if (mat) {
+    if (hint) hint.textContent = `الصفحة الحالية: ${mat.currentPage || 0} من ${mat.totalPages || 0}`;
+    if (targetInp && (!targetInp.value || Number(targetInp.value) <= Number(mat.currentPage || 0))) {
+      targetInp.value = Math.min(mat.totalPages || 100, (mat.currentPage || 0) + 15);
+    }
+  } else {
+    if (hint) hint.textContent = 'لا توجد ملازم مضافة لهذه المادة بعد';
+  }
+}
+
 function openAddSubject() {
   editingId = null;
   document.getElementById('modal-subject-title').textContent = '➕ إضافة مادة جديدة';
@@ -2397,6 +2505,11 @@ function openAddSubject() {
   document.getElementById('lec-per-ch-display').textContent = '8';
   document.getElementById('weekly-goal-range').value = 0;
   document.getElementById('weekly-goal-display').textContent = '0';
+  setSubjectGoalTypeModal('lectures');
+  const matSel = document.getElementById('sub-goal-material-select');
+  if (matSel) matSel.innerHTML = '<option value="">(أضف المادة أولاً ثم اختر ملزمة)</option>';
+  const targetPageInp = document.getElementById('sub-goal-target-page');
+  if (targetPageInp) targetPageInp.value = '0';
   document.getElementById('modal-subject-confirm').textContent = 'إضافة';
   selectedColor = PALETTE[0];
   renderPaletteSwatches();
@@ -2415,6 +2528,24 @@ function openEditSubject() {
   document.getElementById('lec-per-ch-display').textContent = sub.lecPerCh;
   document.getElementById('weekly-goal-range').value = sub.weeklyGoal || 0;
   document.getElementById('weekly-goal-display').textContent = sub.weeklyGoal || 0;
+
+  const goalType = sub.weeklyGoalType || 'lectures';
+  setSubjectGoalTypeModal(goalType);
+  const matSel = document.getElementById('sub-goal-material-select');
+  if (matSel) {
+    const mats = sub.materials || [];
+    if (mats.length === 0) {
+      matSel.innerHTML = '<option value="">لا توجد ملازم مضافة لهذه المادة بعد</option>';
+    } else {
+      matSel.innerHTML = mats.map(m => `
+        <option value="${m.id}" ${m.id === sub.weeklyMaterialId ? 'selected' : ''}>${m.type === 'book' ? '📕' : '📓'} ${m.name} (ص ${m.currentPage}/${m.totalPages})</option>
+      `).join('');
+    }
+  }
+  const targetPageInp = document.getElementById('sub-goal-target-page');
+  if (targetPageInp) targetPageInp.value = sub.weeklyTargetPage || 0;
+  onSubGoalMaterialSelectChange();
+
   document.getElementById('modal-subject-confirm').textContent = 'حفظ التعديل';
   selectedColor = sub.color || PALETTE[0];
   renderPaletteSwatches();
@@ -2427,6 +2558,10 @@ function confirmSubject() {
   const chCount = parseInt(document.getElementById('chapters-range').value) || 8;
   const lecPerCh = parseInt(document.getElementById('lec-per-ch-range').value) || 8;
   const weeklyGoal = parseInt(document.getElementById('weekly-goal-range').value) || 0;
+  const goalType = currentSubjectModalGoalType;
+  const matSel = document.getElementById('sub-goal-material-select');
+  const weeklyMaterialId = matSel ? matSel.value : null;
+  const weeklyTargetPage = parseInt(document.getElementById('sub-goal-target-page')?.value) || 0;
 
   if (editingId) {
     const sub = getSub(editingId);
@@ -2435,6 +2570,9 @@ function confirmSubject() {
       sub.chaptersCount = chCount;
       sub.lecPerCh = lecPerCh;
       sub.weeklyGoal = weeklyGoal;
+      sub.weeklyGoalType = goalType;
+      sub.weeklyMaterialId = weeklyMaterialId;
+      sub.weeklyTargetPage = weeklyTargetPage;
       sub.color = selectedColor;
       toast('تم تعديل المادة بنجاح ✓', 'ok');
     }
@@ -2444,7 +2582,10 @@ function confirmSubject() {
       chaptersCount: chCount,
       lecPerCh,
       color: selectedColor,
-      weeklyGoal
+      weeklyGoal,
+      weeklyGoalType: goalType,
+      weeklyMaterialId,
+      weeklyTargetPage
     });
     STATE.subjects.push(newSub);
     activeId = newSub.id;
@@ -2591,14 +2732,30 @@ function renderLogView() {
 
   const weeklyCard = document.getElementById('log-weekly-goals-card');
   const weeklyList = document.getElementById('log-weekly-goals-list');
-  const subsWithGoal = STATE.subjects.filter(s => (s.weeklyGoal || 0) > 0);
+  const subsWithGoal = STATE.subjects.filter(s => {
+    const isPageGoal = s.weeklyGoalType === 'pages' && Number(s.weeklyTargetPage) > 0;
+    const isLecGoal = (!s.weeklyGoalType || s.weeklyGoalType === 'lectures') && Number(s.weeklyGoal) > 0;
+    return isPageGoal || isLecGoal;
+  });
   if (subsWithGoal.length > 0 && weeklyCard && weeklyList) {
     weeklyCard.style.display = 'block';
     weeklyList.innerHTML = '';
     subsWithGoal.forEach(s => {
-      const doneThisWeek = logCountForSubjectInRange(s.id, weekStart, weekEnd);
-      const target = s.weeklyGoal;
-      const pct = Math.min(100, Math.round((doneThisWeek / target) * 100));
+      let label = '';
+      let pct = 0;
+      if (s.weeklyGoalType === 'pages' && Number(s.weeklyTargetPage) > 0) {
+        const materials = s.materials || [];
+        const mat = materials.find(m => m.id === s.weeklyMaterialId) || materials[0] || { name: 'الملزمة', currentPage: 0 };
+        const cur = Number(mat.currentPage || 0);
+        const target = Number(s.weeklyTargetPage);
+        pct = Math.min(100, Math.max(0, Math.round((cur / target) * 100)));
+        label = `📖 ${mat.name}: ص ${cur} / ${target} (${pct}%)`;
+      } else {
+        const doneThisWeek = logCountForSubjectInRange(s.id, weekStart, weekEnd);
+        const target = s.weeklyGoal;
+        pct = Math.min(100, Math.round((doneThisWeek / target) * 100));
+        label = `🎬 ${doneThisWeek} / ${target} محاضرة (${pct}%)`;
+      }
 
       const item = document.createElement('div');
       item.style.marginBottom = '12px';
@@ -2607,7 +2764,7 @@ function renderLogView() {
           <span style="font-weight:700;color:var(--text0);display:flex;align-items:center;gap:6px;">
             <span style="width:8px;height:8px;border-radius:50%;background:${s.color};"></span>${s.name}
           </span>
-          <span style="color:var(--text1);font-weight:600;">${doneThisWeek} / ${target} محاضرة (${pct}%)</span>
+          <span style="color:var(--text1);font-weight:600;">${label}</span>
         </div>
         <div style="height:6px;background:var(--ink3);border-radius:6px;overflow:hidden;">
           <div style="width:${pct}%;height:100%;background:${s.color};border-radius:6px;transition:width 0.3s;"></div>

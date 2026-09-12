@@ -732,13 +732,24 @@ function toggleAchievement(id, dayKey){
   if(!a) return;
   a.done = !a.done;
 
-  // مزامنة مع StudyVault — إذا كان الإنجاز مرتبط بمحاضرة
-  if (a.studyVaultRef && typeof svMarkLectureDone === 'function') {
-    if (a.done) {
-      svMarkLectureDone(a.studyVaultRef.subjectId, a.studyVaultRef.chapter, a.studyVaultRef.lecture);
-      toast(`✓ تم تعليم المحاضرة كمنجزة في StudyVault`, 'success');
-    } else {
-      svUnmarkLectureDone(a.studyVaultRef.subjectId, a.studyVaultRef.chapter, a.studyVaultRef.lecture);
+  // مزامنة مع StudyVault — إذا كان الإنجاز مرتبط بمحاضرة أو صفحات ملزمة
+  if (a.studyVaultRef) {
+    if (a.studyVaultRef.type === 'material_pages') {
+      if (typeof svMarkMaterialPageDone === 'function') {
+        if (a.done) {
+          svMarkMaterialPageDone(a.studyVaultRef.subjectId, a.studyVaultRef.materialId, a.studyVaultRef.targetPage, a.studyVaultRef.fromPage);
+          toast(`✓ تم تحديث الملزمة في StudyVault إلى ص ${a.studyVaultRef.targetPage}`, 'success');
+        } else if (typeof svUnmarkMaterialPageDone === 'function') {
+          svUnmarkMaterialPageDone(a.studyVaultRef.subjectId, a.studyVaultRef.materialId, a.studyVaultRef.targetPage, a.studyVaultRef.prevPage);
+        }
+      }
+    } else if (typeof svMarkLectureDone === 'function') {
+      if (a.done) {
+        svMarkLectureDone(a.studyVaultRef.subjectId, a.studyVaultRef.chapter, a.studyVaultRef.lecture);
+        toast(`✓ تم تعليم المحاضرة كمنجزة في StudyVault`, 'success');
+      } else if (typeof svUnmarkLectureDone === 'function') {
+        svUnmarkLectureDone(a.studyVaultRef.subjectId, a.studyVaultRef.chapter, a.studyVaultRef.lecture);
+      }
     }
   }
 
@@ -777,7 +788,7 @@ function renderAchievements(){
       <li class="achieve-item ${a.done ? 'done' : ''}">
         <button class="achieve-check ${a.done ? 'done' : ''}" onclick="toggleAchievement('${a.id}','${a.dayKey || currentDayKey}')" title="تم الإنجاز؟">${ICONS.check}</button>
         ${!isDay ? `<span class="day-tag">${formatDayLabel(a.dayKey)}</span>` : ''}
-        ${a.studyVaultRef ? `<span class="sv-item-tag" style="color:${a.studyVaultRef.color || 'var(--primary)'};border-color:${a.studyVaultRef.color || 'var(--primary)'}">📚 ${escapeHtml(a.studyVaultRef.subjectName || 'StudyVault')}</span>` : ''}
+        ${a.studyVaultRef ? `<span class="sv-item-tag" style="color:${a.studyVaultRef.color || 'var(--primary)'};border-color:${a.studyVaultRef.color || 'var(--primary)'}">${a.studyVaultRef.type === 'material_pages' ? '📖 ' + escapeHtml(a.studyVaultRef.subjectName || '') + ' | ' + escapeHtml(a.studyVaultRef.materialName || 'ملزمة') : '📚 ' + escapeHtml(a.studyVaultRef.subjectName || 'StudyVault')}</span>` : ''}
         <span class="achieve-text">${escapeHtml(a.text)}</span>
         <button class="icon-btn danger" title="حذف" onclick="deleteAchievement('${a.id}','${a.dayKey || currentDayKey}')">${ICONS.trash}</button>
       </li>
@@ -791,6 +802,45 @@ function renderAchievements(){
   if(hintEl) hintEl.textContent = stats.totalCount > 0 ? `أنجزت ${stats.doneCount} من ${stats.totalCount}` : (isDay ? 'ضيف أهدافك اليوم عشان نحسب النسبة' : `ما اكو أهداف ${periodWord}`);
   if (typeof renderSvWeeklyGoalsWidget === 'function') renderSvWeeklyGoalsWidget();
   animateCountUp(document.getElementById('points-value'), stats.points);
+  updateAdminIndexAchieveButton();
+}
+
+function updateAdminIndexAchieveButton(){
+  const btn = document.getElementById('btn-toggle-index-achieve');
+  const txt = document.getElementById('btn-toggle-index-achieve-text');
+  const icon = document.getElementById('btn-toggle-index-achieve-icon');
+  if(!btn) return;
+  const isHidden = !!(DATA.settings && DATA.settings.hideViewerAchievements);
+  if(isHidden){
+    btn.className = 'btn btn-secondary btn-sm';
+    btn.style.borderColor = 'rgba(239, 68, 68, 0.5)';
+    btn.style.color = '#ef4444';
+    btn.style.background = 'rgba(239, 68, 68, 0.12)';
+    if(txt) txt.textContent = 'بالاندكس: مخفية 🔒';
+    if(icon) icon.innerHTML = (window.ICONS && window.ICONS.eyeOff) ? window.ICONS.eyeOff : '🔒';
+    btn.title = 'قسم الإنجازات مخفي حالياً عن زوار صفحة الاندكس — اضغط لإظهاره للزوار';
+  } else {
+    btn.className = 'btn btn-secondary btn-sm';
+    btn.style.borderColor = 'rgba(34, 197, 94, 0.5)';
+    btn.style.color = '#22c55e';
+    btn.style.background = 'rgba(34, 197, 94, 0.12)';
+    if(txt) txt.textContent = 'بالاندكس: معروضة 👁️';
+    if(icon) icon.innerHTML = (window.ICONS && window.ICONS.eye) ? window.ICONS.eye : '👁️';
+    btn.title = 'قسم الإنجازات معروض حالياً لزوار صفحة الاندكس — اضغط لإخفائه عن الزوار';
+  }
+}
+
+function toggleIndexAchievementsVisibility(){
+  if(!DATA.settings) DATA.settings = {};
+  DATA.settings.hideViewerAchievements = !DATA.settings.hideViewerAchievements;
+  const isHidden = DATA.settings.hideViewerAchievements;
+
+  const chk = document.getElementById('setting-hide-viewer-achieve');
+  if(chk) chk.checked = isHidden;
+
+  persist();
+  updateAdminIndexAchieveButton();
+  toast(isHidden ? 'تم إخفاء قسم الإنجازات في الاندكس (مخفي عن الزوار) 🔒' : 'تم إظهار قسم الإنجازات في الاندكس للزوار 👁️', 'ok');
 }
 
 /* -------------------- الإعدادات: المظهر -------------------- */
@@ -890,6 +940,9 @@ function saveGoalsSettings(){
     const [dh, dm] = dayEndVal.split(':').map(Number);
     DATA.settings.dayEndMinutes = ((dh * 60 + dm) % (24*60) + 24*60) % (24*60);
   }
+
+  const hideViewerAchieveChk = document.getElementById('setting-hide-viewer-achieve');
+  if(hideViewerAchieveChk) DATA.settings.hideViewerAchievements = hideViewerAchieveChk.checked;
 
   persist();
   renderAll();
@@ -1149,6 +1202,8 @@ function openSettings(tab){
   document.getElementById('input-points-min').value = DATA.settings.pointsPerMinute;
   document.getElementById('input-points-achieve').value = DATA.settings.pointsPerAchievement;
   document.getElementById('input-student-name').value = DATA.settings.studentName;
+  const hideViewerAchieveChk = document.getElementById('setting-hide-viewer-achieve');
+  if(hideViewerAchieveChk) hideViewerAchieveChk.checked = !!DATA.settings.hideViewerAchievements;
   const local = loadLocalConfig();
   document.getElementById('input-admin-pin').value = local.adminPin || '';
   switchSettingsTab(tab || 'appearance');

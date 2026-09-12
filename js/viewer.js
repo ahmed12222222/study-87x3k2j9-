@@ -195,7 +195,21 @@ function renderViewerSessions(catKey){
   `).join('');
 }
 
+function isViewerAchievementsHidden(){
+  return !!(VDATA && VDATA.settings && VDATA.settings.hideViewerAchievements);
+}
+
+function applyViewerAchievementsVisibility(){
+  const cardEl = document.getElementById('viewer-achieve-card');
+  if(!cardEl) return;
+  const isHidden = isViewerAchievementsHidden();
+  cardEl.style.display = isHidden ? 'none' : '';
+}
+
 function renderViewerAchievements(){
+  applyViewerAchievementsVisibility();
+  if(isViewerAchievementsHidden()) return;
+
   const isDay = currentPeriod === 'day';
   const periodWord = { day: 'اليوم', week: 'هالأسبوع', month: 'هالشهر' }[currentPeriod];
   const achievements = getViewerScopedView().achievements;
@@ -208,6 +222,7 @@ function renderViewerAchievements(){
       <li class="achieve-item ${a.done ? 'done' : ''}">
         <span class="achieve-check ${a.done ? 'done' : ''}" style="cursor:default">${ICONS.check}</span>
         ${!isDay ? `<span class="day-tag">${formatDayLabel(a.dayKey)}</span>` : ''}
+        ${a.studyVaultRef ? `<span class="sv-item-tag" style="color:${a.studyVaultRef.color || 'var(--primary)'};border:1px solid ${a.studyVaultRef.color || 'var(--primary)'};padding:2px 8px;border-radius:12px;font-size:0.75rem;display:inline-flex;align-items:center;gap:4px;">${a.studyVaultRef.type === 'material_pages' ? '📖 ' + escapeHtml(a.studyVaultRef.subjectName || '') + ' | ' + escapeHtml(a.studyVaultRef.materialName || '') : '📚 ' + escapeHtml(a.studyVaultRef.subjectName || '')}</span>` : ''}
         <span class="achieve-text">${escapeHtml(a.text)}</span>
       </li>
     `).join('');
@@ -459,6 +474,7 @@ async function reportVisitorEntry(){
 /* -------------------- الإقلاع -------------------- */
 function init(){
   hydrateIcons();
+  applyViewerAchievementsVisibility(isViewerAchievementsHidden());
   renderRatingStars();
   const cached = loadViewerCache();
   if(cached){ VDATA = cached; applyViewerTheme(); renderViewerAll(); }

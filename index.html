@@ -176,7 +176,7 @@
       </div>
     </section>
 
-    <section class="card reveal" style="animation-delay:.25s">
+    <section class="card reveal" style="animation-delay:.25s" id="viewer-achieve-card">
       <div class="card-head">
         <div class="card-head-left">
           <span class="card-icon" data-icon="trophy"></span>
@@ -187,20 +187,22 @@
         </div>
       </div>
 
-      <ul class="achieve-list" id="achieve-list"></ul>
+      <div id="viewer-achieve-body">
+        <ul class="achieve-list" id="achieve-list"></ul>
 
-      <div class="progress-wrap">
-        <div class="progress-side">
-          <div class="progress-title-row">
-            <span class="card-sub">نسبة الإنجاز</span>
-            <span class="progress-percent-num num" id="progress-percent-num">0%</span>
+        <div class="progress-wrap">
+          <div class="progress-side">
+            <div class="progress-title-row">
+              <span class="card-sub">نسبة الإنجاز</span>
+              <span class="progress-percent-num num" id="progress-percent-num">0%</span>
+            </div>
+            <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill"></div></div>
+            <span class="progress-hint" id="progress-hint">—</span>
           </div>
-          <div class="progress-bar-track"><div class="progress-bar-fill" id="progress-fill"></div></div>
-          <span class="progress-hint" id="progress-hint">—</span>
-        </div>
-        <div class="points-orb">
-          <span class="val num" id="points-value">0</span>
-          <span class="lbl">نقطة</span>
+          <div class="points-orb">
+            <span class="val num" id="points-value">0</span>
+            <span class="lbl">نقطة</span>
+          </div>
         </div>
       </div>
     </section>

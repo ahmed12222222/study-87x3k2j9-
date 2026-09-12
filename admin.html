@@ -247,7 +247,7 @@
   </section>
 
   <section class="card reveal" style="animation-delay:.25s">
-    <div class="card-head">
+    <div class="card-head" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;">
       <div class="card-head-left">
         <span class="card-icon" data-icon="trophy"></span>
         <div>
@@ -255,6 +255,10 @@
           <div class="card-sub">سجّل أهدافك اليوم وتابع نسبة إنجازك ونقاطك</div>
         </div>
       </div>
+      <button type="button" class="btn btn-secondary btn-sm" id="btn-toggle-index-achieve" onclick="toggleIndexAchievementsVisibility()" title="تبديل إخفاء أو إظهار الإنجازات في صفحة المتابعين (index.html)" style="display:inline-flex;align-items:center;gap:6px;font-size:0.8rem;padding:6px 14px;border-radius:20px;cursor:pointer;transition:all 0.2s;flex-shrink:0;">
+        <span id="btn-toggle-index-achieve-icon" data-icon="eye"></span>
+        <span id="btn-toggle-index-achieve-text">بالاندكس: معروضة 👁️</span>
+      </button>
     </div>
 
     <form class="achieve-input-row" id="achieve-form">
@@ -455,6 +459,13 @@
             <input type="number" step="1" min="0" class="form-input" id="input-points-achieve">
           </div>
         </div>
+        <div class="form-group" style="padding:10px 14px;background:var(--bg-elevated, rgba(255,255,255,0.03));border:1px solid var(--border);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div>
+            <label class="form-label" for="setting-hide-viewer-achieve" style="margin-bottom:2px;cursor:pointer;font-weight:700;">إخفاء الإنجازات في صفحة المتابعين (index.html)</label>
+            <div class="form-hint" style="margin-top:0;">إخفاء قائمة أهداف وإنجازات اليوم عن الزوار في صفحة المتابعين افتراضياً.</div>
+          </div>
+          <input type="checkbox" id="setting-hide-viewer-achieve" style="width:20px;height:20px;accent-color:var(--primary);cursor:pointer;flex-shrink:0;">
+        </div>
         <button type="button" class="btn btn-primary" onclick="saveGoalsSettings()"><span data-icon="check"></span><span>حفظ</span></button>
       </div>
 
@@ -532,29 +543,101 @@
   </div>
 </div>
 
-<!-- مودال اختيار محاضرة من StudyVault -->
+<!-- مودال اختيار هدف من StudyVault (محاضرات أو ملازم وصفحات) -->
 <div class="modal-overlay" id="modal-sv-picker" role="dialog" aria-modal="true">
-  <div class="modal" style="max-width:480px">
+  <div class="modal" style="max-width:500px">
     <div class="modal-head">
       <h3 class="modal-title" style="display:flex;align-items:center;gap:8px;">
         <span data-icon="book" style="display:inline-flex;width:20px;height:20px;"></span>
-        <span>اختيار محاضرة من StudyVault</span>
+        <span>اختيار هدف من StudyVault</span>
       </h3>
       <button type="button" class="icon-btn" onclick="closeStudyVaultPicker()" aria-label="إغلاق"><span data-icon="x"></span></button>
     </div>
     <div class="modal-body">
+      <!-- شريط التبديل بين المحاضرات والملازم -->
+      <div class="sv-picker-tabs" style="display:flex;gap:8px;margin-bottom:14px;background:var(--bg-elevated, rgba(255,255,255,0.04));padding:4px;border-radius:10px;border:1px solid var(--border);">
+        <button type="button" class="sv-tab-btn" id="sv-tab-lectures" onclick="switchSvPickerMode('lectures')" style="flex:1;padding:8px 10px;border-radius:8px;border:none;background:var(--primary);color:#000;font-weight:700;cursor:pointer;font-family:inherit;font-size:0.86rem;display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.2s;">
+          <span>🎬 محاضرات وفصول</span>
+        </button>
+        <button type="button" class="sv-tab-btn" id="sv-tab-pages" onclick="switchSvPickerMode('pages')" style="flex:1;padding:8px 10px;border-radius:8px;border:none;background:transparent;color:var(--text);font-weight:700;cursor:pointer;font-family:inherit;font-size:0.86rem;display:flex;align-items:center;justify-content:center;gap:6px;transition:all 0.2s;">
+          <span>📖 ملازم وصفحات</span>
+        </button>
+      </div>
+
+      <!-- 1. اختيار المادة -->
       <div class="form-group">
         <label class="form-label">1. اختر المادة</label>
         <div class="sv-picker-chips-row" id="sv-picker-subjects"></div>
       </div>
-      <div class="form-group">
-        <label class="form-label">2. اختر الفصل</label>
-        <div class="sv-picker-chips-row" id="sv-picker-chapters"></div>
+
+      <!-- قسم المحاضرات -->
+      <div id="sv-picker-lectures-section">
+        <div class="form-group">
+          <label class="form-label">2. اختر الفصل</label>
+          <div class="sv-picker-chips-row" id="sv-picker-chapters"></div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">3. اختر المحاضرة لإنجاز اليوم</label>
+          <div class="sv-picker-lec-grid" id="sv-picker-lectures"></div>
+        </div>
       </div>
-      <div class="form-group">
-        <label class="form-label">3. اختر المحاضرة لإنجاز اليوم</label>
-        <div class="sv-picker-lec-grid" id="sv-picker-lectures"></div>
+
+      <!-- قسم الملازم والصفحات -->
+      <div id="sv-picker-pages-section" style="display:none;">
+        <div class="form-group">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+            <label class="form-label" style="margin-bottom:0">2. اختر الملزمة أو الكتاب</label>
+            <button type="button" class="btn-text btn-sm" onclick="svPickerQuickAddMaterialPrompt()" style="font-size:0.78rem;color:var(--primary);background:none;border:none;cursor:pointer;text-decoration:underline;">+ إضافة ملزمة جديدة للمادة</button>
+          </div>
+          <div class="sv-picker-chips-row" id="sv-picker-materials"></div>
+        </div>
+
+        <div class="form-group" id="sv-picker-material-pages-card" style="background:var(--bg-elevated, rgba(255,255,255,0.03));border:1px solid var(--border);border-radius:10px;padding:12px;">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+            <span style="font-size:0.84rem;color:var(--text-muted);">التقدم الحالي بالملزمة:</span>
+            <span id="sv-picker-cur-page-badge" class="num" style="font-size:0.86rem;font-weight:700;color:var(--primary);">صفحة 0 من 0</span>
+          </div>
+
+          <!-- خيارات تحديد الهدف: لحد صفحة vs من-إلى -->
+          <div style="display:flex;gap:6px;margin-bottom:12px;">
+            <button type="button" class="btn btn-sm sv-page-mode-btn" id="sv-mode-target" onclick="setSvPagesSubMode('target')" style="flex:1;font-size:0.78rem;padding:6px;background:var(--primary);color:#000;font-weight:700;border:none;border-radius:6px;cursor:pointer;">🎯 الوصول لحد صفحة</button>
+            <button type="button" class="btn btn-sm btn-secondary sv-page-mode-btn" id="sv-mode-range" onclick="setSvPagesSubMode('range')" style="flex:1;font-size:0.78rem;padding:6px;background:transparent;color:var(--text);font-weight:600;border:1px solid var(--border);border-radius:6px;cursor:pointer;">📑 قراءة مجال محدد</button>
+          </div>
+
+          <!-- وضع: الوصول لحد صفحة -->
+          <div id="sv-box-target-mode">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+              <label for="sv-picker-target-page-input" style="font-size:0.85rem;min-width:85px;font-weight:600;">الهدف لليوم:</label>
+              <div style="display:flex;align-items:center;gap:6px;flex:1;">
+                <span style="font-size:0.82rem;color:var(--text-muted);">لحد ص:</span>
+                <input type="number" id="sv-picker-target-page-input" class="form-input" min="1" max="999" style="max-width:105px;text-align:center;font-weight:800;" oninput="onSvTargetPageInputChange(this.value)">
+                <span id="sv-picker-target-page-diff" style="font-size:0.8rem;color:var(--text-muted);">(0 صفحة)</span>
+              </div>
+            </div>
+            <!-- أزرار سريعة للقفز بالصفحات -->
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button type="button" class="btn btn-secondary btn-sm" onclick="svPickerAddQuickPages(5)" style="font-size:0.76rem;padding:4px 8px;">+5 ص</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="svPickerAddQuickPages(10)" style="font-size:0.76rem;padding:4px 8px;">+10 ص</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="svPickerAddQuickPages(15)" style="font-size:0.76rem;padding:4px 8px;">+15 ص</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="svPickerAddQuickPages(20)" style="font-size:0.76rem;padding:4px 8px;">+20 ص</button>
+              <button type="button" class="btn btn-secondary btn-sm" onclick="svPickerAddQuickPages(30)" style="font-size:0.76rem;padding:4px 8px;">+30 ص</button>
+            </div>
+          </div>
+
+          <!-- وضع: مجال محدد من-إلى -->
+          <div id="sv-box-range-mode" style="display:none;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <span style="font-size:0.82rem;color:var(--text-muted);">من ص:</span>
+              <input type="number" id="sv-picker-from-page-input" class="form-input" min="1" max="999" style="flex:1;text-align:center;font-weight:800;" oninput="onSvRangeInputChange()">
+              <span style="font-size:0.82rem;color:var(--text-muted);">إلى ص:</span>
+              <input type="number" id="sv-picker-to-page-input" class="form-input" min="1" max="999" style="flex:1;text-align:center;font-weight:800;" oninput="onSvRangeInputChange()">
+            </div>
+            <div id="sv-picker-range-count" style="font-size:0.8rem;color:var(--text-muted);margin-top:8px;text-align:center;">المجموع: 0 صفحة</div>
+          </div>
+        </div>
       </div>
+
+      <!-- المعاينة -->
       <div class="sv-picker-preview-box" id="sv-picker-preview">--</div>
     </div>
     <div class="modal-foot" style="display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -563,7 +646,7 @@
       </a>
       <div style="display:flex;gap:8px;">
         <button type="button" class="btn btn-secondary btn-sm" onclick="closeStudyVaultPicker()">إلغاء</button>
-        <button type="button" class="btn btn-primary btn-sm" onclick="confirmAddSvLectureToAchievements()">
+        <button type="button" class="btn btn-primary btn-sm" id="btn-sv-picker-confirm" onclick="confirmAddSvItemToAchievements()">
           <span data-icon="plus"></span><span>إضافة لإنجازات اليوم</span>
         </button>
       </div>
