@@ -307,5 +307,10 @@
 <script src="js/viewer.js"></script>
 <script src="js/rank-svgs.js"></script>
 <script src="js/focus-tracker-badge.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+}
+</script>
 </body>
 </html>

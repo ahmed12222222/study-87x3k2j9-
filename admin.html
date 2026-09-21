@@ -682,5 +682,10 @@
 <script src="js/shared.js"></script>
 <script src="js/studyvault-bridge.js"></script>
 <script src="js/admin.js"></script>
+<script>
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('/sw.js').catch(() => {}); });
+}
+</script>
 </body>
 </html>
