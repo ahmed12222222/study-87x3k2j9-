@@ -1,5 +1,5 @@
 // sw.js — Service Worker لتشغيل تطبيق "إنجاز" بصورة مستقلة PWA
-const CACHE_NAME = 'injaz-cache-v2';
+const CACHE_NAME = 'injaz-cache-v3';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -13,13 +13,10 @@ const STATIC_ASSETS = [
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
+  '/icon-maskable-512.png',
   '/apple-touch-icon.png',
-  '/icon.svg',
-  '/public/manifest.json',
-  '/public/icon-192.png',
-  '/public/icon-512.png',
-  '/public/apple-touch-icon.png',
-  '/public/icon.svg'
+  '/favicon-32.png',
+  '/icon.svg'
 ];
 
 self.addEventListener('install', (event) => {

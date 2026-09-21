@@ -1,9 +1,9 @@
 {
-  "id": "/",
+  "id": "/?source=pwa",
   "name": "إنجاز — منصة تنظيم وقت الدراسة والمتابعة",
   "short_name": "إنجاز",
   "description": "منصة ذكية متكاملة لإدارة جلسات الدراسة، الاستراحات، أوقات النوم، والإنجازات اليومية مع لوحة تحكم ومتابعة حية",
-  "start_url": "/index.html",
+  "start_url": "/",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
@@ -26,13 +26,7 @@
       "purpose": "any"
     },
     {
-      "src": "/icon.svg",
-      "sizes": "512x512",
-      "type": "image/svg+xml",
-      "purpose": "any"
-    },
-    {
-      "src": "/icon-512.png",
+      "src": "/icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -43,7 +37,7 @@
       "name": "لوحة المتابعة",
       "short_name": "المتابعة",
       "description": "عرض لوحة المتابعة الحية للزوار والمراقبين",
-      "url": "/index.html",
+      "url": "/",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
