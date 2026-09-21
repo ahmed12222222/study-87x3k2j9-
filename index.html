@@ -5,7 +5,14 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>إنجاز — لوحة المتابعة</title>
 <meta name="description" content="لوحة متابعة مباشرة لتقدم الدراسة والإنجازات اليومية">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%8E%93%3C/text%3E%3C/svg%3E">
+<link rel="icon" type="image/svg+xml" href="/public/icon.svg">
+<link rel="icon" type="image/png" sizes="32x32" href="/public/favicon-32.png">
+<link rel="apple-touch-icon" sizes="180x180" href="/public/apple-touch-icon.png">
+<link rel="manifest" href="/public/manifest.json">
+<meta name="theme-color" content="#0d0e15">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="إنجاز">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;500;700;800&family=Reem+Kufi:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -27,7 +34,7 @@
 
   <header class="topbar reveal">
     <div class="brand">
-      <div class="brand-mark"><span data-icon="book"></span></div>
+      <div class="brand-mark brand-mark-logo"><img src="/public/icon-192.png" alt="شعار إنجاز" class="brand-logo-img"></div>
       <div class="brand-text">
         <h1>إنجاز</h1>
         <div class="role-tag"><span class="role-dot"></span><span>لوحة متابعة — <span id="brand-role-name">المذاكِر المجتهد</span></span></div>
@@ -39,6 +46,10 @@
         <span class="clock num" id="live-clock">--:--</span>
       </div>
       <div class="topbar-actions">
+        <button type="button" class="btn btn-secondary btn-sm pwa-install-btn" onclick="promptPWAInstall()" title="تثبيت التطبيق على جهازك" aria-label="تثبيت التطبيق" style="display:none; gap:6px; font-weight:700;">
+          <span data-icon="sparkle"></span>
+          <span>تثبيت التطبيق</span>
+        </button>
         <div class="btn-icon ft-badge-btn ft-badge-static" id="ftBadgeViewer" data-ft-badge data-no-link="true" title="رتبة الأسبوع" aria-label="رتبة الأسبوع" style="cursor:default; pointer-events:none;"></div>
         <div class="theme-popover-wrap">
           <button type="button" class="btn-icon" id="theme-popover-btn" onclick="toggleThemePopover()" title="تغيير المظهر لجهازك" aria-label="تغيير المظهر"><span data-icon="palette"></span></button>
@@ -296,8 +307,10 @@
 <script type="module" src="js/firebase-bridge.js"></script>
 <script src="js/icons.js"></script>
 <script src="js/shared.js"></script>
+<script src="js/studyvault-bridge.js"></script>
 <script src="js/viewer.js"></script>
 <script src="js/rank-svgs.js"></script>
 <script src="js/focus-tracker-badge.js"></script>
+<script src="js/pwa.js"></script>
 </body>
 </html>
