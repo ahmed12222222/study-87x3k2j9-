@@ -1,15 +1,20 @@
 // sw.js — Service Worker لتشغيل تطبيق "إنجاز" بصورة مستقلة PWA
-const CACHE_NAME = 'injaz-cache-v1';
+const CACHE_NAME = 'injaz-cache-v2';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/admin.html',
   '/css/style.css',
+  '/css/themes.css',
   '/js/icons.js',
   '/js/shared.js',
   '/js/viewer.js',
   '/js/admin.js',
-  '/js/pwa.js',
+  '/manifest.json',
+  '/icon-192.png',
+  '/icon-512.png',
+  '/apple-touch-icon.png',
+  '/icon.svg',
   '/public/manifest.json',
   '/public/icon-192.png',
   '/public/icon-512.png',

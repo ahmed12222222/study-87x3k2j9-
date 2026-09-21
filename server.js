@@ -109,6 +109,20 @@ app.get('/api/visits/today', (req, res) => {
   });
 });
 
+// PWA Service Worker & Manifest routes
+app.get('/sw.js', (req, res) => {
+  res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
+  res.setHeader('Service-Worker-Allowed', '/');
+  res.setHeader('Cache-Control', 'no-cache');
+  res.sendFile(path.join(__dirname, 'sw.js'));
+});
+
+app.get(['/manifest.json', '/public/manifest.json'], (req, res) => {
+  res.setHeader('Content-Type', 'application/manifest+json; charset=UTF-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.sendFile(path.join(__dirname, 'manifest.json'));
+});
+
 // Clean route aliases BEFORE express.static
 app.get('/admin', (req, res) => {
   res.sendFile(path.join(__dirname, 'admin.html'));
