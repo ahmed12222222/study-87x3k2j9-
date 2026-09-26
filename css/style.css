@@ -758,3 +758,128 @@ body[data-goal-level="3"]::after{ opacity:1; animation: ambient-fire-pulse 3.4s 
   .timer-display{ font-size:1.8rem; }
   .quiz-question{ font-size:1rem; padding: var(--space-3); }
 }
+
+/* ============ PWA Install Button & Modal ============ */
+.pwa-install-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  background: color-mix(in srgb, var(--primary) 18%, transparent);
+  border: 1px solid color-mix(in srgb, var(--primary) 40%, transparent);
+  border-radius: var(--radius-pill);
+  color: var(--primary);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--t-fast);
+  white-space: nowrap;
+}
+.pwa-install-btn:hover {
+  background: color-mix(in srgb, var(--primary) 28%, transparent);
+  border-color: var(--primary);
+  transform: translateY(-1px);
+}
+.pwa-install-btn svg {
+  width: 15px;
+  height: 15px;
+  stroke: currentColor;
+}
+.pwa-banner {
+  position: fixed;
+  bottom: 20px;
+  left: 20px;
+  right: 20px;
+  max-width: 480px;
+  margin: 0 auto;
+  background: var(--card-bg, #141724);
+  border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+  border-radius: var(--radius-lg, 16px);
+  padding: 14px 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  z-index: 999;
+  animation: pwa-banner-in 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes pwa-banner-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.pwa-banner-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 1;
+}
+.pwa-banner-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--primary) 20%, transparent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--primary);
+  flex-shrink: 0;
+}
+.pwa-banner-icon svg {
+  width: 22px;
+  height: 22px;
+}
+.pwa-banner-text h4 {
+  font-size: 0.9rem;
+  font-weight: 700;
+  margin-bottom: 2px;
+  color: var(--text);
+}
+.pwa-banner-text p {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+.pwa-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.pwa-guide-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin: 16px 0;
+}
+.pwa-guide-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: color-mix(in srgb, var(--surface) 60%, transparent);
+  border: 1px solid var(--border);
+  padding: 12px 14px;
+  border-radius: var(--radius-md, 12px);
+}
+.pwa-guide-step-num {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--primary-ink, #0d0e15);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 0.85rem;
+  flex-shrink: 0;
+}
+.pwa-guide-step-desc {
+  font-size: 0.88rem;
+  line-height: 1.5;
+  color: var(--text);
+}
+.pwa-guide-step-desc strong {
+  color: var(--primary);
+}
+

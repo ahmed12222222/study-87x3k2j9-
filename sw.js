@@ -1,15 +1,21 @@
 // sw.js — Service Worker لتشغيل تطبيق "إنجاز" بصورة مستقلة PWA
-const CACHE_NAME = 'injaz-cache-v3';
+const CACHE_NAME = 'injaz-cache-v4';
 const STATIC_ASSETS = [
   '/',
   '/index.html',
   '/admin.html',
+  '/focus-tracker.html',
+  '/review.html',
+  '/studyvault.html',
   '/css/style.css',
   '/css/themes.css',
+  '/css/focus-tracker-badge.css',
+  '/css/focus-tracker.css',
   '/js/icons.js',
   '/js/shared.js',
   '/js/viewer.js',
   '/js/admin.js',
+  '/js/pwa-install.js',
   '/manifest.json',
   '/icon-192.png',
   '/icon-512.png',
@@ -21,10 +27,14 @@ const STATIC_ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS).catch((err) => {
-        console.warn('Some assets failed to cache initially:', err);
-      });
+    caches.open(CACHE_NAME).then(async (cache) => {
+      await Promise.allSettled(
+        STATIC_ASSETS.map((url) =>
+          cache.add(url).catch((err) => {
+            console.warn('Failed to cache asset:', url, err);
+          })
+        )
+      );
     }).then(() => self.skipWaiting())
   );
 });

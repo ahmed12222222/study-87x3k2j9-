@@ -1,8 +1,8 @@
 {
   "id": "/",
-  "name": "إنجاز — لوحة المتابعة",
+  "name": "إنجاز — منصة تنظيم وقت الدراسة والمتابعة",
   "short_name": "إنجاز",
-  "description": "لوحة متابعة الدراسة والإنجازات اليومية",
+  "description": "منصة ذكية متكاملة لإدارة جلسات الدراسة، الاستراحات، أوقات النوم، والإنجازات اليومية مع لوحة تحكم ومتابعة حية",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
@@ -11,21 +11,24 @@
   "theme_color": "#0d0e15",
   "lang": "ar",
   "dir": "rtl",
-  "categories": [
-    "education",
-    "productivity"
-  ],
+  "categories": ["education", "productivity"],
   "icons": [
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon.svg",
-      "sizes": "any",
-      "type": "image/svg+xml",
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
       "purpose": "maskable"
     }
   ],
@@ -33,26 +36,16 @@
     {
       "name": "لوحة المتابعة",
       "short_name": "المتابعة",
+      "description": "عرض لوحة المتابعة الحية للزوار والمراقبين",
       "url": "/",
-      "icons": [
-        {
-          "src": "/icon.svg",
-          "sizes": "any",
-          "type": "image/svg+xml"
-        }
-      ]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "لوحة الإدارة",
       "short_name": "الإدارة",
+      "description": "تسجيل جلسات الدراسة والتحكم بالعداد",
       "url": "/admin.html",
-      "icons": [
-        {
-          "src": "/icon.svg",
-          "sizes": "any",
-          "type": "image/svg+xml"
-        }
-      ]
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
     }
   ]
 }
