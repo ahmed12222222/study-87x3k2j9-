@@ -37,6 +37,86 @@ const CAT_ORDER = ['study', 'break', 'sleep'];
 function persist(){
   saveData(DATA);
   scheduleSyncPush();
+  syncCompletedDaysToFocusTracker();
+}
+
+/* ============================================================
+   مزامنة نقاط اليوم المنتهية مع Focus Tracker تلقائياً بعد 12 بالليل
+   مع تطبيق مضاعف البونسات إن وجد لليوم، لضمان عدم ضياع أي نقاط
+   ============================================================ */
+function syncCompletedDaysToFocusTracker() {
+  try {
+    const ftRaw = localStorage.getItem('focusTrackerData_v1');
+    if (!ftRaw) return;
+    let ftData = JSON.parse(ftRaw);
+    if (!ftData || !Array.isArray(ftData.entries)) return;
+
+    const today = todayKey();
+    const settings = DATA.settings || {};
+    let modified = false;
+
+    if (!ftData.dailyBonusHistory) ftData.dailyBonusHistory = {};
+
+    // فحص الأيام المنتهية السابقة فقط (dateStr < todayKey())
+    const pastDays = Object.keys(DATA.days || {}).filter(d => d < today && /^\d{4}-\d{2}-\d{2}$/.test(d)).sort();
+
+    pastDays.forEach(dateStr => {
+      const dayObj = DATA.days[dateStr];
+      if (!dayObj) return;
+      const stats = computeStats(dayObj, settings);
+      const basePoints = stats.points || 0;
+      if (basePoints <= 0) return;
+
+      let multiplier = ftData.dailyBonusHistory[dateStr] || 1;
+      // إذا لم يكن مسجلاً في التاريخ، نفحص البونسات النشطة لذلك اليوم
+      if (multiplier === 1 && Array.isArray(ftData.bonuses)) {
+        const active = ftData.bonuses.filter(b => b.affectsPoints && b.lastActiveDay === dateStr && b.currentStage > 0);
+        if (active.length > 0) {
+          let totalExtra = 0;
+          for (const b of active) {
+            if (Array.isArray(b.stages) && b.currentStage > 0) {
+              const p = parseFloat(b.stages[b.currentStage - 1]);
+              if (isFinite(p) && p > 0) {
+                totalExtra += (p >= 1 ? (p - 1) : p);
+              }
+            }
+          }
+          multiplier = Math.round((1 + totalExtra) * 100) / 100;
+          ftData.dailyBonusHistory[dateStr] = multiplier;
+        }
+      }
+
+      const finalPoints = Math.round(basePoints * multiplier);
+      const existing = ftData.entries.find(e => e.date === dateStr && e.subject === 'إنجاز');
+      if (existing) {
+        if (existing.points !== finalPoints) {
+          existing.points = finalPoints;
+          if (multiplier > 1) existing.bonusMult = multiplier;
+          modified = true;
+        }
+      } else {
+        ftData.entries.push({
+          id: 'e_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 7),
+          points: finalPoints,
+          subject: 'إنجاز',
+          date: dateStr,
+          bonusMult: multiplier > 1 ? multiplier : undefined
+        });
+        modified = true;
+      }
+    });
+
+    if (modified) {
+      ftData.updatedAt = Date.now();
+      localStorage.setItem('focusTrackerData_v1', JSON.stringify(ftData));
+      if (window.FirebaseSync && window.INJAZ_FIREBASE_CONFIG) {
+        window.FirebaseSync.write('focusTracker', ftData).catch(() => {});
+      }
+      window.dispatchEvent(new Event('focus-tracker-data-changed'));
+    }
+  } catch (e) {
+    console.warn('Auto-sync to Focus Tracker notice:', e);
+  }
 }
 
 // نفس الحفظ، بس بدون فترة انتظار — نستخدمها لحظة بدء/إيقاف العداد تحديداً حتى تنعرض عند العائلة فوراً وهي تعد
@@ -1310,6 +1390,9 @@ function init(){
     if(e.key === 'Escape'){ document.querySelectorAll('.modal-overlay.show').forEach(ov => closeAnyModal(ov.id)); }
   });
 
+  syncCompletedDaysToFocusTracker();
+  setInterval(syncCompletedDaysToFocusTracker, 60000);
+
   // متصفحات الموبايل أحياناً تجمّد الصفحة بالخلفية لفترة (توفير بطارية) — لما ترجع نشطة، نحدّث كل شي ونتأكد العداد
   // مزبوط ومضبوط، حتى لو انعطلت المؤقّتات لفترة وإحنا بعيدين عن الصفحة
   document.addEventListener('visibilitychange', () => {
@@ -1318,6 +1401,7 @@ function init(){
       renderHeaderClock();
       if(DATA.activeTimer) startTickInterval();
       fetchTodayVisits(false);
+      syncCompletedDaysToFocusTracker();
     }
   });
 }

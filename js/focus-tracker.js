@@ -219,13 +219,14 @@ function loadData() {
             entries: Array.isArray(parsed.entries) ? parsed.entries : [],
             restDays: Array.isArray(parsed.restDays) ? parsed.restDays : [],
             bonuses: (Array.isArray(parsed.bonuses) ? parsed.bonuses : []).map(migrateBonus),
+            dailyBonusHistory: (parsed && typeof parsed.dailyBonusHistory === 'object' && parsed.dailyBonusHistory) ? parsed.dailyBonusHistory : {},
             rankThresholds: Array.isArray(parsed.rankThresholds) ? parsed.rankThresholds : null,
             monthRankThresholds: Array.isArray(parsed.monthRankThresholds) ? parsed.monthRankThresholds : null,
             updatedAt: typeof parsed.updatedAt === 'number' ? parsed.updatedAt : null,
         };
     } catch (e) {
         console.error('فشل تحميل البيانات المحفوظة:', e);
-        return { entries: [], restDays: [], bonuses: [], rankThresholds: null, monthRankThresholds: null, updatedAt: null };
+        return { entries: [], restDays: [], bonuses: [], dailyBonusHistory: {}, rankThresholds: null, monthRankThresholds: null, updatedAt: null };
     }
 }
 
@@ -282,6 +283,7 @@ async function initFirebaseSync() {
                 entries: Array.isArray(remote.entries) ? remote.entries : [],
                 restDays: Array.isArray(remote.restDays) ? remote.restDays : [],
                 bonuses: (Array.isArray(remote.bonuses) ? remote.bonuses : []).map(migrateBonus),
+                dailyBonusHistory: (remote && typeof remote.dailyBonusHistory === 'object' && remote.dailyBonusHistory) ? remote.dailyBonusHistory : (appData.dailyBonusHistory || {}),
                 rankThresholds: Array.isArray(remote.rankThresholds) ? remote.rankThresholds : null,
                 monthRankThresholds: Array.isArray(remote.monthRankThresholds) ? remote.monthRankThresholds : null,
                 updatedAt: remoteUpdatedAt,
@@ -785,19 +787,44 @@ function removeStageFromBonus(id, stageIdx) {
     refreshAll();
 }
 
-// يرجّع بونسات "تأثر بالنقاط" لصفر تلقائياً أول ما ينفتح الموقع بيوم جديد — عشان تنكسب من جديد كل يوم
+// يسجّل مضاعف اليوم الحالي لضمان عدم ضياع البونس عند الانتقال لليوم التالي بعد منتصف الليل
+function recordCurrentDayBonusMultiplier() {
+    if (typeof moment === 'undefined') return;
+    const today = moment().format('YYYY-MM-DD');
+    const mult = getActiveMultiplier(appData);
+    if (!appData.dailyBonusHistory) appData.dailyBonusHistory = {};
+    if (mult > 1) {
+        appData.dailyBonusHistory[today] = Math.max(appData.dailyBonusHistory[today] || 1, mult);
+    }
+}
+
+// يرجّع بونسات "تأثر بالنقاط" لصفر تلقائياً أول ما ينفتح الموقع بيوم جديد — مع حفظ مضاعف الأيام السابقة لكي تنحسب مع النقاط بعد 12 بالليل
 function checkDailyBonusReset() {
+    if (typeof moment === 'undefined') return;
     const today = moment().format('YYYY-MM-DD');
     let changed = false;
+    if (!appData.dailyBonusHistory) appData.dailyBonusHistory = {};
+
     (appData.bonuses || []).forEach(b => {
         if (!b.affectsPoints) return;
-        if (b.lastActiveDay !== today) {
+        if (b.lastActiveDay && b.lastActiveDay !== today) {
+            // حفظ مضاعف بونس اليوم السابق قبل تصفيره
+            const prevDay = b.lastActiveDay;
+            if (prevDay < today && b.currentStage > 0) {
+                const currentMult = getActiveMultiplier(appData);
+                if (currentMult > 1) {
+                    appData.dailyBonusHistory[prevDay] = Math.max(appData.dailyBonusHistory[prevDay] || 1, currentMult);
+                }
+            }
             if (b.currentStage !== 0) changed = true;
             b.currentStage = 0;
             b.lastActiveDay = today;
         }
     });
     if (changed) saveData(appData);
+
+    // نقل نقاط الأيام المنتهية تلقائياً بعد 12 بالليل مع مضاعف البونسات
+    autoSyncInjazToFocusTracker();
 }
 
 // مضاعف بونس وحد: الرقم يجيك من عنوان المرحلة الحالية نفسها اللي المستخدم كتبه (يعني هو يحدد الرقم بنفسه بالكامل).
@@ -882,20 +909,91 @@ function computeInjazPointsForDay(injazData, dateStr) {
 }
 
 // يستورد كـ إدخال بمادة "إنجاز" — إذا كان أصلاً موجود إدخال "إنجاز" لنفس التاريخ يحدّثه بدل ما يكرره
-function importInjazEntry(dateStr, points) {
+function importInjazEntry(dateStr, points, mult) {
     const existing = appData.entries.find(e => e.date === dateStr && e.subject === 'إنجاز');
+    const pts = Math.max(0, Math.round(Number(points) || 0));
     if (existing) {
-        existing.points = Math.max(0, Math.round(Number(points) || 0));
+        existing.points = pts;
+        if (mult && mult > 1) existing.bonusMult = mult;
     } else {
         appData.entries.push({
             id: uid('e'),
-            points: Math.max(0, Math.round(Number(points) || 0)),
+            points: pts,
             subject: 'إنجاز',
             date: dateStr,
+            bonusMult: (mult && mult > 1) ? mult : undefined
         });
     }
     saveData(appData);
     refreshAll();
+}
+
+// المزامنة التلقائية: نقل نقاط الأيام المنتهية من غرفة الأدمن (إنجاز) بعد الساعة 12 بالليل إلى الفوكس تراكر
+// مع تطبيق البونسات إذا كانت مفعلة لليوم، ودون حذف خيار الاستيراد اليدوي من إنجاز
+async function autoSyncInjazToFocusTracker() {
+    if (typeof moment === 'undefined') return;
+    const today = moment().format('YYYY-MM-DD');
+    recordCurrentDayBonusMultiplier();
+
+    const result = await fetchInjazRawData();
+    if (!result || !result.data || !result.data.days) return;
+    const injazData = result.data;
+
+    let modified = false;
+    if (!appData.dailyBonusHistory) appData.dailyBonusHistory = {};
+
+    // فحص الأيام المنتهية السابقة فقط (dateStr < today)
+    const pastDays = Object.keys(injazData.days || {})
+        .filter(d => d < today && moment(d).isValid())
+        .sort();
+
+    for (const dateStr of pastDays) {
+        const { points: basePoints } = computeInjazPointsForDay(injazData, dateStr);
+        if (basePoints <= 0) continue;
+
+        // التحقق من مضاعف البونس المسجل لهذا اليوم المنتهي
+        let mult = appData.dailyBonusHistory[dateStr] || 1;
+        if (mult === 1 && Array.isArray(appData.bonuses)) {
+            const activeOnDay = appData.bonuses.filter(b => b.affectsPoints && b.lastActiveDay === dateStr && b.currentStage > 0);
+            if (activeOnDay.length > 0) {
+                let totalExtra = 0;
+                for (const b of activeOnDay) {
+                    const m = bonusStageMultiplier(b);
+                    if (typeof m === 'number' && m > 0) {
+                        totalExtra += (m >= 1 ? (m - 1) : m);
+                    }
+                }
+                mult = Math.round((1 + totalExtra) * 100) / 100;
+                appData.dailyBonusHistory[dateStr] = mult;
+            }
+        }
+
+        const finalPoints = Math.max(0, Math.round(basePoints * (mult || 1)));
+
+        // هل يوجد إدخال سابق لمادة "إنجاز" لهذا التاريخ؟
+        const existing = appData.entries.find(e => e.date === dateStr && e.subject === 'إنجاز');
+        if (existing) {
+            if (existing.points !== finalPoints) {
+                existing.points = finalPoints;
+                if (mult > 1) existing.bonusMult = mult;
+                modified = true;
+            }
+        } else {
+            appData.entries.push({
+                id: uid('e'),
+                points: finalPoints,
+                subject: 'إنجاز',
+                date: dateStr,
+                bonusMult: mult > 1 ? mult : undefined
+            });
+            modified = true;
+        }
+    }
+
+    if (modified) {
+        saveData(appData);
+        refreshAll();
+    }
 }
 
 
@@ -970,9 +1068,10 @@ function renderLog() {
             </div>`;
         }
         const subjectDisplay = item.subject ? escapeHtml(item.subject) : '—';
+        const bonusTag = (item.bonusMult && item.bonusMult > 1) ? ` <span class="bonus-mult-badge" title="تم تطبيق بونس ×${item.bonusMult}">⚡×${item.bonusMult}</span>` : '';
         return `<div class="log-row">
             <span class="log-date"><bdi dir="ltr">${escapeHtml(dateDisplay)}</bdi></span>
-            <span class="log-mid">${subjectDisplay} — <bdi dir="ltr">${Math.floor(item.points)}</bdi> نقطة</span>
+            <span class="log-mid">${subjectDisplay} — <bdi dir="ltr">${Math.floor(item.points)}</bdi> نقطة${bonusTag}</span>
             <button type="button" class="log-del" data-kind="entry" data-id="${item.id}" title="حذف">✕</button>
         </div>`;
     }).join('');
@@ -1324,16 +1423,22 @@ if (typeof document !== 'undefined') {
                     previewEl.innerHTML = '<span class="form-hint">⚠️ ما لكيت بيانات إنجاز — لا محلياً ولا بالسحابة.</span>';
                     return;
                 }
-                const { studyMinutes, doneCount, points } = computeInjazPointsForDay(result.data, dateStr);
+                const { studyMinutes, doneCount, points: basePoints } = computeInjazPointsForDay(result.data, dateStr);
+                let mult = (appData.dailyBonusHistory && appData.dailyBonusHistory[dateStr]) || 1;
+                if (mult === 1 && dateStr === moment().format('YYYY-MM-DD')) {
+                    mult = getActiveMultiplier(appData);
+                }
+                const points = Math.max(0, Math.round(basePoints * (mult || 1)));
+
                 previewEl.innerHTML = `
-                    <div class="form-hint">📚 دراسة: <bdi dir="ltr">${studyMinutes}</bdi> د · ✅ إنجازات: <bdi dir="ltr">${doneCount}</bdi> · جلبتها ${result.source}</div>
+                    <div class="form-hint">📚 دراسة: <bdi dir="ltr">${studyMinutes}</bdi> د · ✅ إنجازات: <bdi dir="ltr">${doneCount}</bdi> · الأساس: <bdi dir="ltr">${basePoints}</bdi>${mult > 1 ? ` · ⚡ مضاعف البونس: <bdi dir="ltr">×${mult}</bdi>` : ''}</div>
                     <div class="qa-row" style="margin-top:8px;">
                         <input type="number" id="injazSuggestedPoints" min="0" step="1" value="${points}" style="flex:1;">
                         <button type="button" id="injazConfirmBtn" class="qa-btn qa-btn-primary">✅ استيراد</button>
                     </div>`;
                 document.getElementById('injazConfirmBtn').addEventListener('click', () => {
                     const finalPoints = parseInt(document.getElementById('injazSuggestedPoints').value, 10) || 0;
-                    importInjazEntry(dateStr, finalPoints);
+                    importInjazEntry(dateStr, finalPoints, mult);
                     previewEl.innerHTML = `<span class="form-hint">✓ انستورد ${finalPoints} نقطة ليوم ${dateStr}.</span>`;
                 });
             });
@@ -1403,7 +1508,14 @@ if (typeof document !== 'undefined') {
         }
 
         refreshAll();
+        autoSyncInjazToFocusTracker();
         setInterval(refreshAll, 60000);
+        setInterval(autoSyncInjazToFocusTracker, 60000);
+
+        window.addEventListener('focus-tracker-data-changed', () => {
+            appData = loadData();
+            refreshAll();
+        });
     });
 }
 
@@ -1418,6 +1530,6 @@ if (typeof module !== 'undefined' && module.exports) {
         addStageToBonus, removeStageFromBonus, checkDailyBonusReset,
         applyRankOverrides, getCurrentRanks: () => currentRanks, getCurrentMonthRanks: () => currentMonthRanks,
         getAppData: () => appData, setAppData: (d) => { appData = d; }, initFirebaseSync,
-        migrateBonus,
+        migrateBonus, autoSyncInjazToFocusTracker,
     };
 }
