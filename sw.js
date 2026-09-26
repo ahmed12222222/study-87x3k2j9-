@@ -1,5 +1,6 @@
 // sw.js — Service Worker لتشغيل تطبيق "إنجاز" بصورة مستقلة PWA
-const CACHE_NAME = 'injaz-cache-v4';
+const CACHE_NAME = 'injaz-pwa-v6';
+
 const STATIC_ASSETS = [
   '/',
   '/index.html',
@@ -18,24 +19,27 @@ const STATIC_ASSETS = [
   '/js/pwa-install.js',
   '/manifest.json',
   '/icon-192.png',
+  '/icon-maskable-192.png',
   '/icon-512.png',
   '/icon-maskable-512.png',
   '/apple-touch-icon.png',
   '/favicon-32.png',
+  '/favicon.ico',
   '/icon.svg'
 ];
 
 self.addEventListener('install', (event) => {
+  self.skipWaiting();
   event.waitUntil(
     caches.open(CACHE_NAME).then(async (cache) => {
       await Promise.allSettled(
         STATIC_ASSETS.map((url) =>
           cache.add(url).catch((err) => {
-            console.warn('Failed to cache asset:', url, err);
+            console.warn('PWA Cache notice for:', url, err);
           })
         )
       );
-    }).then(() => self.skipWaiting())
+    })
   );
 });
 
@@ -50,18 +54,19 @@ self.addEventListener('activate', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  if (event.request.method !== 'GET') return;
+
   const url = new URL(event.request.url);
 
-  // لا نكاش طلبات الـ API أو اتصالات فايربيس المباشرة
-  if (url.pathname.startsWith('/api/') || url.hostname.includes('firestore') || url.hostname.includes('firebase')) {
+  // Skip API calls & Firebase
+  if (url.pathname.startsWith('/api/') || url.hostname.includes('firebase') || url.hostname.includes('googleapis.com')) {
     return;
   }
 
-  // للأصول الثابتة: Network first with Cache fallback
   event.respondWith(
     fetch(event.request)
       .then((networkResponse) => {
-        if (networkResponse && networkResponse.status === 200 && event.request.method === 'GET') {
+        if (networkResponse && networkResponse.status === 200) {
           const responseClone = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
             cache.put(event.request, responseClone);
@@ -69,12 +74,17 @@ self.addEventListener('fetch', (event) => {
         }
         return networkResponse;
       })
-      .catch(() => {
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) return cachedResponse;
-          if (event.request.mode === 'navigate') {
-            return caches.match('/index.html');
-          }
+      .catch(async () => {
+        const cachedResponse = await caches.match(event.request);
+        if (cachedResponse) return cachedResponse;
+        if (event.request.mode === 'navigate') {
+          const fallback = await caches.match('/index.html');
+          if (fallback) return fallback;
+        }
+        return new Response('Offline', {
+          status: 503,
+          statusText: 'Service Unavailable',
+          headers: { 'Content-Type': 'text/plain; charset=utf-8' },
         });
       })
   );

@@ -15,6 +15,18 @@
 <link rel="manifest" href="/manifest.json">
 <meta property="og:image" content="/icon-512.png">
 <meta name="theme-color" content="#0d0e15">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="إنجاز">
+<script>
+window.__pwaPrompt = null;
+window.addEventListener('beforeinstallprompt', function(e) {
+  e.preventDefault();
+  window.__pwaPrompt = e;
+  window.dispatchEvent(new CustomEvent('pwa-prompt-captured'));
+});
+</script>
 <link rel="stylesheet" href="css/focus-tracker.css">
 </head>
 <body>

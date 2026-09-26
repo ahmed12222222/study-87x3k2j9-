@@ -136,6 +136,12 @@ app.get(['/icon-192.png', '/public/icon-192.png'], (req, res) => {
   res.sendFile(path.join(__dirname, 'icon-192.png'));
 });
 
+app.get(['/icon-maskable-192.png', '/public/icon-maskable-192.png'], (req, res) => {
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'public, max-age=86400');
+  res.sendFile(path.join(__dirname, 'icon-maskable-192.png'));
+});
+
 app.get(['/icon-512.png', '/public/icon-512.png'], (req, res) => {
   res.setHeader('Content-Type', 'image/png');
   res.setHeader('Cache-Control', 'public, max-age=86400');
