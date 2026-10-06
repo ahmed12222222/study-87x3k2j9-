@@ -580,31 +580,195 @@ function toggleManualForm(catKey){
 
 function setManualMode(catKey, mode){
   const clockTab = document.getElementById(`tab-clock-${catKey}`);
-  const durationTab = document.getElementById(`tab-duration-${catKey}`);
+  const numericTab = document.getElementById(`tab-numeric-${catKey}`) || document.getElementById(`tab-duration-${catKey}`);
   const clockForm = document.getElementById(`clockform-${catKey}`);
-  const durationForm = document.getElementById(`durationform-${catKey}`);
+  const numericForm = document.getElementById(`numericform-${catKey}`) || document.getElementById(`durationform-${catKey}`);
 
-  const isDuration = (mode === 'duration');
-  if(clockTab) clockTab.classList.toggle('active', !isDuration);
-  if(durationTab) durationTab.classList.toggle('active', isDuration);
-  if(clockForm) clockForm.style.display = isDuration ? 'none' : 'grid';
-  if(durationForm) durationForm.style.display = isDuration ? 'flex' : 'none';
+  const isNumeric = (mode === 'numeric' || mode === 'duration');
+  if(clockTab) clockTab.classList.toggle('active', !isNumeric);
+  if(numericTab) numericTab.classList.toggle('active', isNumeric);
+  if(clockForm) clockForm.style.display = isNumeric ? 'none' : 'grid';
+  if(numericForm) numericForm.style.display = isNumeric ? 'flex' : 'none';
 
-  if(isDuration){
-    const minsInput = document.getElementById(`manualmins-${catKey}`);
-    if(minsInput) setTimeout(() => minsInput.focus(), 60);
+  if(isNumeric){
+    const hInput = document.getElementById(`numstart-h-${catKey}`);
+    if(hInput) setTimeout(() => hInput.focus(), 60);
+    updateNumericDurationPreview(catKey);
   } else {
     const startInput = document.getElementById(`manualstart-${catKey}`);
     if(startInput) setTimeout(() => startInput.focus(), 60);
   }
 }
 
-function quickFillMinutes(catKey, minutes){
-  const minsInput = document.getElementById(`manualmins-${catKey}`);
-  if(minsInput){
-    minsInput.value = minutes;
-    minsInput.focus();
+/**
+ * جلب تفاصيل نهاية آخر نشاط مسجل في اليوم (دراسة، استراحة، أو نوم)
+ */
+function getLastActivityInfo(targetDateKey){
+  const dKey = targetDateKey || currentDayKey || todayKey();
+  let latestSession = null;
+  let latestEndTime = null;
+  let latestCatLabel = '';
+
+  const day = DATA.days && DATA.days[dKey];
+  if(day){
+    CAT_ORDER.forEach(catKey => {
+      const arr = day[CATS[catKey].arrayKey] || [];
+      arr.forEach(s => {
+        if(s.end){
+          const t = new Date(s.end).getTime();
+          if(!latestEndTime || t > latestEndTime){
+            latestEndTime = t;
+            latestSession = s;
+            latestCatLabel = CATS[catKey].label;
+          }
+        }
+      });
+    });
   }
+
+  // إذا لم نجد في هذا اليوم وكان اليوم الحالي، نبحث في اليوم السابق كاحتياط
+  if(!latestSession){
+    const prevDate = new Date(dKey + 'T12:00:00');
+    prevDate.setDate(prevDate.getDate() - 1);
+    const prevKey = todayKey(prevDate);
+    const prevDay = DATA.days && DATA.days[prevKey];
+    if(prevDay){
+      CAT_ORDER.forEach(catKey => {
+        const arr = prevDay[CATS[catKey].arrayKey] || [];
+        arr.forEach(s => {
+          if(s.end){
+            const t = new Date(s.end).getTime();
+            if(!latestEndTime || t > latestEndTime){
+              latestEndTime = t;
+              latestSession = s;
+              latestCatLabel = CATS[catKey].label;
+            }
+          }
+        });
+      });
+    }
+  }
+
+  if(!latestSession || !latestSession.end) return null;
+  const endDate = new Date(latestSession.end);
+  const hours = endDate.getHours();
+  const minutes = endDate.getMinutes();
+  const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  const period = hours >= 12 ? 'م' : 'ص';
+  const h12 = hours % 12 || 12;
+  const display = `${h12}:${String(minutes).padStart(2, '0')} ${period}`;
+
+  return {
+    time24,
+    hours,
+    minutes,
+    h12,
+    period,
+    label: latestCatLabel,
+    display,
+    iso: latestSession.end
+  };
+}
+
+/**
+ * زر: "🔄 من آخر نشاط" — يملأ وقت البداية تلقائياً من نهاية آخر نشاط قام به المستخدم
+ */
+function fillFromLastActivity(catKey){
+  const last = getLastActivityInfo(currentDayKey);
+  if(!last){
+    toast('ماكو نشاط مسجل سابقاً لجلب وقته', 'info');
+    return;
+  }
+
+  // 1. ملء في الوضع الافتراضي (الساعة)
+  const clockInput = document.getElementById(`manualstart-${catKey}`);
+  if(clockInput) clockInput.value = last.time24;
+
+  // 2. ملء في وضع الأرقام (ساعات ودقائق)
+  const numStartH = document.getElementById(`numstart-h-${catKey}`);
+  const numStartM = document.getElementById(`numstart-m-${catKey}`);
+  const numStartPeriod = document.getElementById(`numstart-p-${catKey}`);
+  if(numStartH){
+    numStartH.value = last.h12;
+    if(numStartM) numStartM.value = String(last.minutes).padStart(2, '0');
+    if(numStartPeriod) numStartPeriod.value = last.period;
+    updateNumericDurationPreview(catKey);
+  }
+
+  toast(`تم ضبط البداية من نهاية ${last.label}: ${last.display} ✓`, 'success');
+}
+
+/**
+ * زر: "⏱️ الآن" — يملأ وقت النهاية بالوقت الحالي فوراً
+ */
+function fillCurrentTime(catKey){
+  const now = new Date();
+  const hours = now.getHours();
+  const minutes = now.getMinutes();
+  const time24 = `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+  const period = hours >= 12 ? 'م' : 'ص';
+  const h12 = hours % 12 || 12;
+
+  // 1. ملء في الوضع الافتراضي
+  const clockInput = document.getElementById(`manualend-${catKey}`);
+  if(clockInput) clockInput.value = time24;
+
+  // 2. ملء في وضع الأرقام
+  const numEndH = document.getElementById(`numend-h-${catKey}`);
+  const numEndM = document.getElementById(`numend-m-${catKey}`);
+  const numEndPeriod = document.getElementById(`numend-p-${catKey}`);
+  if(numEndH){
+    numEndH.value = h12;
+    if(numEndM) numEndM.value = String(minutes).padStart(2, '0');
+    if(numEndPeriod) numEndPeriod.value = period;
+    updateNumericDurationPreview(catKey);
+  }
+
+  toast(`تم ضبط النهاية على الوقت الحالي: ${h12}:${String(minutes).padStart(2, '0')} ${period} ✓`, 'info');
+}
+
+/**
+ * حساب ومعاينة المدة لحظياً عند كتابة الأرقام
+ */
+function updateNumericDurationPreview(catKey){
+  const startHInput = document.getElementById(`numstart-h-${catKey}`);
+  const startMInput = document.getElementById(`numstart-m-${catKey}`);
+  const startPInput = document.getElementById(`numstart-p-${catKey}`);
+  const endHInput = document.getElementById(`numend-h-${catKey}`);
+  const endMInput = document.getElementById(`numend-m-${catKey}`);
+  const endPInput = document.getElementById(`numend-p-${catKey}`);
+  const badgeEl = document.getElementById(`numcalc-${catKey}`);
+  const textEl = document.getElementById(`numcalctext-${catKey}`);
+  if(!textEl) return;
+
+  const rawSh = startHInput ? parseInt(startHInput.value, 10) : NaN;
+  const rawEh = endHInput ? parseInt(endHInput.value, 10) : NaN;
+
+  if(isNaN(rawSh) || isNaN(rawEh)){
+    textEl.textContent = 'اكتب ساعات ودقائق البداية والنهاية';
+    if(badgeEl) badgeEl.classList.remove('active');
+    return;
+  }
+
+  const sm = startMInput ? (parseInt(startMInput.value, 10) || 0) : 0;
+  const em = endMInput ? (parseInt(endMInput.value, 10) || 0) : 0;
+  const sp = startPInput ? startPInput.value : 'م';
+  const ep = endPInput ? endPInput.value : 'م';
+
+  let sh = rawSh >= 12 && rawSh <= 23 ? rawSh : ((rawSh % 12) + (sp === 'م' ? 12 : 0));
+  let eh = rawEh >= 12 && rawEh <= 23 ? rawEh : ((rawEh % 12) + (ep === 'م' ? 12 : 0));
+
+  let startMins = sh * 60 + sm;
+  let endMins = eh * 60 + em;
+  let diff = endMins - startMins;
+  let crossed = false;
+  if(diff <= 0){
+    diff += 24 * 60;
+    crossed = true;
+  }
+
+  textEl.textContent = `⏱️ المدة المحسوبة: ${formatDuration(diff)} (${diff} دقيقة)${crossed ? ' — تمتد لليوم التالي 🌙' : ''}`;
+  if(badgeEl) badgeEl.classList.add('active');
 }
 
 function submitManualEntry(catKey){
@@ -618,7 +782,7 @@ function submitManualEntry(catKey){
   const start = new Date(base.getFullYear(), base.getMonth(), base.getDate(), sh, sm, 0);
   let end = new Date(base.getFullYear(), base.getMonth(), base.getDate(), eh, em, 0);
   let crossedMidnight = false;
-  if(end <= start){ end = new Date(end.getTime() + 24*60*60*1000); crossedMidnight = true; } // مثلاً نوم من الليل للصبح — نفهمها تلقائياً باليوم الثاني بدل ما نرفضها
+  if(end <= start){ end = new Date(end.getTime() + 24*60*60*1000); crossedMidnight = true; }
 
   const day = ensureDay(DATA, currentDayKey);
   const prevMinutes = day[cat.arrayKey].reduce((s,x)=>s+x.minutes, 0);
@@ -633,29 +797,51 @@ function submitManualEntry(catKey){
   if(catKey === 'study' && currentDayKey === todayKey()) checkGoalCelebration(prevMinutes, prevMinutes + minutes);
 }
 
-function submitManualDurationEntry(catKey){
+function submitNumericTimeEntry(catKey){
   const cat = CATS[catKey];
-  const minsInput = document.getElementById(`manualmins-${catKey}`);
-  if(!minsInput) return;
-  const minutes = parseInt(minsInput.value, 10);
-  if(isNaN(minutes) || minutes <= 0){
-    toast('اكتب عدد الدقائق كرقم صحيح (مثلاً: 45)', 'error');
-    minsInput.focus();
+  const startHInput = document.getElementById(`numstart-h-${catKey}`);
+  const startMInput = document.getElementById(`numstart-m-${catKey}`);
+  const startPInput = document.getElementById(`numstart-p-${catKey}`);
+  const endHInput = document.getElementById(`numend-h-${catKey}`);
+  const endMInput = document.getElementById(`numend-m-${catKey}`);
+  const endPInput = document.getElementById(`numend-p-${catKey}`);
+
+  const rawSh = startHInput ? parseInt(startHInput.value, 10) : NaN;
+  const rawEh = endHInput ? parseInt(endHInput.value, 10) : NaN;
+
+  if(isNaN(rawSh)){
+    toast('اكتب ساعة البداية (مثلاً: 2 أو 02)', 'error');
+    if(startHInput) startHInput.focus();
     return;
   }
-  if(minutes > 1440){
-    toast('الحد الأقصى لجلسة واحدة هو 1440 دقيقة (24 ساعة)', 'error');
+  if(isNaN(rawEh)){
+    toast('اكتب ساعة النهاية (مثلاً: 8 أو 08)', 'error');
+    if(endHInput) endHInput.focus();
     return;
   }
 
-  let start, end;
-  if(currentDayKey === todayKey()){
-    end = new Date();
-    start = new Date(end.getTime() - minutes * 60000);
-  } else {
-    const base = new Date(currentDayKey + 'T14:00:00');
-    start = new Date(base.getTime() - (minutes / 2) * 60000);
-    end = new Date(start.getTime() + minutes * 60000);
+  const sm = startMInput ? (parseInt(startMInput.value, 10) || 0) : 0;
+  const em = endMInput ? (parseInt(endMInput.value, 10) || 0) : 0;
+  const sp = startPInput ? startPInput.value : 'م';
+  const ep = endPInput ? endPInput.value : 'م';
+
+  // معالجة 12 ساعة أو 24 ساعة بذكاء تام
+  let sh = rawSh >= 12 && rawSh <= 23 ? rawSh : ((rawSh % 12) + (sp === 'م' ? 12 : 0));
+  let eh = rawEh >= 12 && rawEh <= 23 ? rawEh : ((rawEh % 12) + (ep === 'م' ? 12 : 0));
+
+  const base = new Date(currentDayKey + 'T00:00:00');
+  const start = new Date(base.getFullYear(), base.getMonth(), base.getDate(), sh, sm, 0);
+  let end = new Date(base.getFullYear(), base.getMonth(), base.getDate(), eh, em, 0);
+  let crossedMidnight = false;
+  if(end <= start){
+    end = new Date(end.getTime() + 24 * 60 * 60 * 1000);
+    crossedMidnight = true;
+  }
+
+  const minutes = Math.round((end - start) / 60000);
+  if(minutes <= 0){
+    toast('وقت البداية والنهاية متطابقان، يرجى التأكد من الوقت', 'error');
+    return;
   }
 
   const day = ensureDay(DATA, currentDayKey);
@@ -666,15 +852,19 @@ function submitManualDurationEntry(catKey){
     end: end.toISOString(),
     minutes,
     details: '',
-    source: 'manual'
+    source: 'manual-numeric'
   };
   day[cat.arrayKey].push(session);
   persist();
   renderAll();
 
-  minsInput.value = '';
+  if(startHInput) startHInput.value = '';
+  if(startMInput) startMInput.value = '';
+  if(endHInput) endHInput.value = '';
+  if(endMInput) endMInput.value = '';
   toggleManualForm(catKey);
-  toast(`تمت إضافة ${formatDuration(minutes)} في ${cat.label} بنجاح ✓`, 'success');
+
+  toast(crossedMidnight ? `${cat.addedToast} (${formatDuration(minutes)} تمتد لليوم التالي 🌙)` : `${cat.addedToast} (${formatDuration(minutes)}) ✓`, 'success');
   if(catKey === 'study' && currentDayKey === todayKey()){
     checkGoalCelebration(prevMinutes, prevMinutes + minutes);
   }
@@ -682,9 +872,11 @@ function submitManualDurationEntry(catKey){
 
 // إتاحة الدوال على window للاستدعاء من أزرار HTML
 window.setManualMode = setManualMode;
-window.quickFillMinutes = quickFillMinutes;
+window.fillFromLastActivity = fillFromLastActivity;
+window.fillCurrentTime = fillCurrentTime;
+window.updateNumericDurationPreview = updateNumericDurationPreview;
 window.submitManualEntry = submitManualEntry;
-window.submitManualDurationEntry = submitManualDurationEntry;
+window.submitNumericTimeEntry = submitNumericTimeEntry;
 window.toggleManualForm = toggleManualForm;
 
 /* -------------------- قوائم الجلسات -------------------- */
@@ -1470,9 +1662,12 @@ function init(){
   document.getElementById('clockform-study')?.addEventListener('submit', (e) => { e.preventDefault(); submitManualEntry('study'); });
   document.getElementById('clockform-break')?.addEventListener('submit', (e) => { e.preventDefault(); submitManualEntry('break'); });
   document.getElementById('clockform-sleep')?.addEventListener('submit', (e) => { e.preventDefault(); submitManualEntry('sleep'); });
-  document.getElementById('durationform-study')?.addEventListener('submit', (e) => { e.preventDefault(); submitManualDurationEntry('study'); });
-  document.getElementById('durationform-break')?.addEventListener('submit', (e) => { e.preventDefault(); submitManualDurationEntry('break'); });
-  document.getElementById('durationform-sleep')?.addEventListener('submit', (e) => { e.preventDefault(); submitManualDurationEntry('sleep'); });
+  document.getElementById('numericform-study')?.addEventListener('submit', (e) => { e.preventDefault(); submitNumericTimeEntry('study'); });
+  document.getElementById('numericform-break')?.addEventListener('submit', (e) => { e.preventDefault(); submitNumericTimeEntry('break'); });
+  document.getElementById('numericform-sleep')?.addEventListener('submit', (e) => { e.preventDefault(); submitNumericTimeEntry('sleep'); });
+  document.getElementById('durationform-study')?.addEventListener('submit', (e) => { e.preventDefault(); submitNumericTimeEntry('study'); });
+  document.getElementById('durationform-break')?.addEventListener('submit', (e) => { e.preventDefault(); submitNumericTimeEntry('break'); });
+  document.getElementById('durationform-sleep')?.addEventListener('submit', (e) => { e.preventDefault(); submitNumericTimeEntry('sleep'); });
 
   function closeAnyModal(id){ if(id === 'modal-day') closeDayModal(); else closeModal(id); }
   document.querySelectorAll('.modal-overlay').forEach(ov => {

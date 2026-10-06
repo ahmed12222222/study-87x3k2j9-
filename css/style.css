@@ -291,7 +291,30 @@ body[data-goal-level="3"]::after{ opacity:1; animation: ambient-fire-pulse 3.4s 
 .manual-mode-tab.active{ background: var(--bg-elevated-3); color: var(--text); box-shadow: 0 2px 8px rgba(0,0,0,0.25); border:1px solid var(--border-strong); }
 .manual-mode-tab:hover:not(.active){ color: var(--text); }
 
+.field-head-with-action{ display:flex; align-items:center; justify-content:space-between; margin-bottom:5px; gap:6px; }
+.btn-text-action{ background: color-mix(in srgb, var(--primary) 14%, transparent); border:1px solid color-mix(in srgb, var(--primary) 32%, transparent); color: var(--primary); font-size:0.72rem; font-weight:700; padding:2px 8px; border-radius: var(--radius-pill); cursor:pointer; transition: all var(--t-fast); white-space:nowrap; display:inline-flex; align-items:center; gap:4px; }
+.btn-text-action:hover{ background: color-mix(in srgb, var(--primary) 26%, transparent); border-color: var(--primary); transform: translateY(-1px); }
+
 .manual-clock-grid{ display:grid; grid-template-columns: 1fr 1fr auto; gap: var(--space-2); align-items:end; }
+
+.manual-numeric-form{ display:flex; flex-direction:column; gap:10px; }
+.numeric-times-row{ display:grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.numeric-time-col{ display:flex; flex-direction:column; gap:5px; background: var(--bg-soft); border:1px solid var(--border); padding:8px 10px; border-radius: var(--radius-md); }
+.field-label-bold{ font-size:0.76rem; font-weight:700; color: var(--text); }
+.time-digit-inputs{ display:flex; align-items:flex-end; gap:4px; justify-content:center; }
+.digit-box{ flex:1; display:flex; flex-direction:column; gap:2px; min-width:0; }
+.digit-box label{ font-size:0.65rem; color: var(--text-muted); text-align:center; font-weight:600; }
+.digit-input{ text-align:center; font-family: var(--font-mono); font-size:1.15rem; font-weight:700; padding:8px 2px; }
+.digit-box-sm{ flex: 0 0 52px; }
+.digit-select{ padding:8px 2px; font-weight:700; font-size:0.86rem; text-align:center; }
+.time-colon{ font-size:1.3rem; font-weight:800; color: var(--text-muted); margin-bottom:8px; font-family: var(--font-mono); flex-shrink:0; }
+
+.numeric-calc-footer{ display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-top:2px; padding-top:6px; border-top:1px dashed var(--border); }
+.numeric-calc-badge{ display:flex; align-items:center; gap:6px; font-size:0.78rem; color: var(--text-muted); background: var(--bg-soft); border:1px solid var(--border); padding:6px 12px; border-radius: var(--radius-pill); flex:1; min-width:140px; }
+.numeric-calc-badge.active{ background: color-mix(in srgb, var(--primary) 12%, transparent); border-color: color-mix(in srgb, var(--primary) 35%, transparent); color: var(--text); }
+.numeric-calc-badge .calc-icon{ font-size:0.9rem; flex-shrink:0; }
+.numeric-calc-badge .calc-text{ font-weight:700; font-size:0.76rem; }
+
 .manual-duration-form{ display:flex; flex-direction:column; gap:10px; }
 .duration-input-row{ display:flex; align-items:flex-end; gap: var(--space-2); }
 .duration-field{ flex:1; }
@@ -860,6 +883,9 @@ body[data-goal-level="3"]::after{ opacity:1; animation: ambient-fire-pulse 3.4s 
   /* الإضافة اليدوية بالأرقام وبالساعة على الهاتف */
   .manual-clock-grid{ grid-template-columns: 1fr 1fr; }
   .manual-clock-grid .manual-submit-btn{ grid-column: span 2; width: 100%; }
+  .numeric-times-row{ grid-template-columns: 1fr; gap: 8px; }
+  .numeric-calc-footer{ flex-direction: column; align-items: stretch; gap: 8px; }
+  .numeric-calc-badge{ width: 100%; justify-content: center; }
   .duration-input-row{ flex-direction: column; align-items: stretch; }
   .duration-input-row .manual-submit-btn{ width: 100%; }
 

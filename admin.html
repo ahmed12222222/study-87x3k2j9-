@@ -201,39 +201,90 @@
           <button type="button" class="manual-mode-tab active" id="tab-clock-study" onclick="setManualMode('study', 'clock')">
             <span data-icon="clock"></span><span>بالساعة (من - إلى)</span>
           </button>
-          <button type="button" class="manual-mode-tab" id="tab-duration-study" onclick="setManualMode('study', 'duration')">
-            <span data-icon="sparkle"></span><span>بالأرقام (دقائق)</span>
+          <button type="button" class="manual-mode-tab" id="tab-numeric-study" onclick="setManualMode('study', 'numeric')">
+            <span data-icon="sparkle"></span><span>كتابة الأرقام (ساعات ودقائق)</span>
           </button>
         </div>
 
+        <!-- 1. الوضع الافتراضي: بالساعة (من - إلى) مع زر جلب آخر نشاط وزر الآن -->
         <form class="manual-clock-grid" id="clockform-study" onsubmit="event.preventDefault(); submitManualEntry('study');">
-          <div class="field"><label for="manualstart-study">من</label><input type="time" class="form-input" id="manualstart-study"></div>
-          <div class="field"><label for="manualend-study">إلى</label><input type="time" class="form-input" id="manualend-study"></div>
-          <button type="submit" class="btn btn-secondary manual-submit-btn" title="إضافة الجلسة"><span data-icon="plus"></span><span>إضافة</span></button>
+          <div class="field">
+            <div class="field-head-with-action">
+              <label for="manualstart-study">من</label>
+              <button type="button" class="btn-text-action" onclick="fillFromLastActivity('study')" title="جلب وقت نهاية آخر نشاط مسجل">🔄 من آخر نشاط</button>
+            </div>
+            <input type="time" class="form-input" id="manualstart-study">
+          </div>
+          <div class="field">
+            <div class="field-head-with-action">
+              <label for="manualend-study">إلى</label>
+              <button type="button" class="btn-text-action" onclick="fillCurrentTime('study')" title="ضبط على الوقت الحالي الآن">⏱️ الآن</button>
+            </div>
+            <input type="time" class="form-input" id="manualend-study">
+          </div>
+          <button type="submit" class="btn btn-primary manual-submit-btn" title="إضافة الجلسة"><span data-icon="plus"></span><span>إضافة</span></button>
         </form>
 
-        <form class="manual-duration-form" id="durationform-study" style="display:none;" onsubmit="event.preventDefault(); submitManualDurationEntry('study');">
-          <div class="duration-input-row">
-            <div class="field duration-field">
-              <label for="manualmins-study">المدة بالدقائق مباشرة</label>
-              <div class="duration-input-group">
-                <input type="number" class="form-input num" id="manualmins-study" placeholder="مثلاً: 45" min="1" max="1440" step="1">
-                <span class="duration-unit">دقيقة</span>
+        <!-- 2. الوضع الثاني: كتابة الأرقام مباشرة (ساعات ودقائق) مع زر جلب آخر نشاط وعرض فوري للمدة -->
+        <form class="manual-numeric-form" id="numericform-study" style="display:none;" onsubmit="event.preventDefault(); submitNumericTimeEntry('study');">
+          <div class="numeric-times-row">
+            <div class="numeric-time-col">
+              <div class="field-head-with-action">
+                <span class="field-label-bold">من (البداية):</span>
+                <button type="button" class="btn-text-action" onclick="fillFromLastActivity('study')" title="جلب وقت نهاية آخر نشاط مسجل">🔄 من آخر نشاط</button>
+              </div>
+              <div class="time-digit-inputs">
+                <div class="digit-box">
+                  <label for="numstart-h-study">الساعة</label>
+                  <input type="number" id="numstart-h-study" class="form-input num digit-input" placeholder="02" min="1" max="23" oninput="updateNumericDurationPreview('study')">
+                </div>
+                <span class="time-colon">:</span>
+                <div class="digit-box">
+                  <label for="numstart-m-study">الدقيقة</label>
+                  <input type="number" id="numstart-m-study" class="form-input num digit-input" placeholder="00" min="0" max="59" oninput="updateNumericDurationPreview('study')">
+                </div>
+                <div class="digit-box digit-box-sm">
+                  <label for="numstart-p-study">فترة</label>
+                  <select id="numstart-p-study" class="form-select digit-select" onchange="updateNumericDurationPreview('study')">
+                    <option value="م">م</option>
+                    <option value="ص">ص</option>
+                  </select>
+                </div>
               </div>
             </div>
-            <button type="submit" class="btn btn-primary manual-submit-btn" title="إضافة فورية">
-              <span data-icon="plus"></span><span>إضافة</span>
-            </button>
+
+            <div class="numeric-time-col">
+              <div class="field-head-with-action">
+                <span class="field-label-bold">إلى (النهاية):</span>
+                <button type="button" class="btn-text-action" onclick="fillCurrentTime('study')" title="ضبط على الوقت الحالي الآن">⏱️ الآن</button>
+              </div>
+              <div class="time-digit-inputs">
+                <div class="digit-box">
+                  <label for="numend-h-study">الساعة</label>
+                  <input type="number" id="numend-h-study" class="form-input num digit-input" placeholder="08" min="1" max="23" oninput="updateNumericDurationPreview('study')">
+                </div>
+                <span class="time-colon">:</span>
+                <div class="digit-box">
+                  <label for="numend-m-study">الدقيقة</label>
+                  <input type="number" id="numend-m-study" class="form-input num digit-input" placeholder="00" min="0" max="59" oninput="updateNumericDurationPreview('study')">
+                </div>
+                <div class="digit-box digit-box-sm">
+                  <label for="numend-p-study">فترة</label>
+                  <select id="numend-p-study" class="form-select digit-select" onchange="updateNumericDurationPreview('study')">
+                    <option value="م">م</option>
+                    <option value="ص">ص</option>
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="quick-chips-row">
-            <span class="quick-chips-label">خيارات سريعة:</span>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('study', 15)">+15د</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('study', 25)">+25د</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('study', 30)">+30د</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('study', 45)">+45د</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('study', 60)">+1س (60د)</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('study', 90)">+1.5س</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('study', 120)">+2س</button>
+
+          <div class="numeric-calc-footer">
+            <div class="numeric-calc-badge" id="numcalc-study">
+              <span class="calc-icon">⏱️</span>
+              <span class="calc-text" id="numcalctext-study">اكتب ساعات ودقائق البداية والنهاية</span>
+            </div>
+            <button type="submit" class="btn btn-primary manual-submit-btn"><span data-icon="plus"></span><span>إضافة الجلسة</span></button>
           </div>
         </form>
       </div>
@@ -266,39 +317,90 @@
           <button type="button" class="manual-mode-tab active" id="tab-clock-break" onclick="setManualMode('break', 'clock')">
             <span data-icon="clock"></span><span>بالساعة (من - إلى)</span>
           </button>
-          <button type="button" class="manual-mode-tab" id="tab-duration-break" onclick="setManualMode('break', 'duration')">
-            <span data-icon="sparkle"></span><span>بالأرقام (دقائق)</span>
+          <button type="button" class="manual-mode-tab" id="tab-numeric-break" onclick="setManualMode('break', 'numeric')">
+            <span data-icon="sparkle"></span><span>كتابة الأرقام (ساعات ودقائق)</span>
           </button>
         </div>
 
+        <!-- 1. الوضع الافتراضي: بالساعة (من - إلى) مع زر جلب آخر نشاط وزر الآن -->
         <form class="manual-clock-grid" id="clockform-break" onsubmit="event.preventDefault(); submitManualEntry('break');">
-          <div class="field"><label for="manualstart-break">من</label><input type="time" class="form-input" id="manualstart-break"></div>
-          <div class="field"><label for="manualend-break">إلى</label><input type="time" class="form-input" id="manualend-break"></div>
-          <button type="submit" class="btn btn-secondary manual-submit-btn" title="إضافة الجلسة"><span data-icon="plus"></span><span>إضافة</span></button>
+          <div class="field">
+            <div class="field-head-with-action">
+              <label for="manualstart-break">من</label>
+              <button type="button" class="btn-text-action" onclick="fillFromLastActivity('break')" title="جلب وقت نهاية آخر نشاط مسجل">🔄 من آخر نشاط</button>
+            </div>
+            <input type="time" class="form-input" id="manualstart-break">
+          </div>
+          <div class="field">
+            <div class="field-head-with-action">
+              <label for="manualend-break">إلى</label>
+              <button type="button" class="btn-text-action" onclick="fillCurrentTime('break')" title="ضبط على الوقت الحالي الآن">⏱️ الآن</button>
+            </div>
+            <input type="time" class="form-input" id="manualend-break">
+          </div>
+          <button type="submit" class="btn btn-primary manual-submit-btn" title="إضافة الجلسة"><span data-icon="plus"></span><span>إضافة</span></button>
         </form>
 
-        <form class="manual-duration-form" id="durationform-break" style="display:none;" onsubmit="event.preventDefault(); submitManualDurationEntry('break');">
-          <div class="duration-input-row">
-            <div class="field duration-field">
-              <label for="manualmins-break">المدة بالدقائق مباشرة</label>
-              <div class="duration-input-group">
-                <input type="number" class="form-input num" id="manualmins-break" placeholder="مثلاً: 15" min="1" max="720" step="1">
-                <span class="duration-unit">دقيقة</span>
+        <!-- 2. الوضع الثاني: كتابة الأرقام مباشرة (ساعات ودقائق) مع زر جلب آخر نشاط وعرض فوري للمدة -->
+        <form class="manual-numeric-form" id="numericform-break" style="display:none;" onsubmit="event.preventDefault(); submitNumericTimeEntry('break');">
+          <div class="numeric-times-row">
+            <div class="numeric-time-col">
+              <div class="field-head-with-action">
+                <span class="field-label-bold">من (البداية):</span>
+                <button type="button" class="btn-text-action" onclick="fillFromLastActivity('break')" title="جلب وقت نهاية آخر نشاط مسجل">🔄 من آخر نشاط</button>
+              </div>
+              <div class="time-digit-inputs">
+                <div class="digit-box">
+                  <label for="numstart-h-break">الساعة</label>
+                  <input type="number" id="numstart-h-break" class="form-input num digit-input" placeholder="02" min="1" max="23" oninput="updateNumericDurationPreview('break')">
+                </div>
+                <span class="time-colon">:</span>
+                <div class="digit-box">
+                  <label for="numstart-m-break">الدقيقة</label>
+                  <input type="number" id="numstart-m-break" class="form-input num digit-input" placeholder="00" min="0" max="59" oninput="updateNumericDurationPreview('break')">
+                </div>
+                <div class="digit-box digit-box-sm">
+                  <label for="numstart-p-break">فترة</label>
+                  <select id="numstart-p-break" class="form-select digit-select" onchange="updateNumericDurationPreview('break')">
+                    <option value="م">م</option>
+                    <option value="ص">ص</option>
+                  </select>
+                </div>
               </div>
             </div>
-            <button type="submit" class="btn btn-primary manual-submit-btn" title="إضافة فورية">
-              <span data-icon="plus"></span><span>إضافة</span>
-            </button>
+
+            <div class="numeric-time-col">
+              <div class="field-head-with-action">
+                <span class="field-label-bold">إلى (النهاية):</span>
+                <button type="button" class="btn-text-action" onclick="fillCurrentTime('break')" title="ضبط على الوقت الحالي الآن">⏱️ الآن</button>
+              </div>
+              <div class="time-digit-inputs">
+                <div class="digit-box">
+                  <label for="numend-h-break">الساعة</label>
+                  <input type="number" id="numend-h-break" class="form-input num digit-input" placeholder="08" min="1" max="23" oninput="updateNumericDurationPreview('break')">
+                </div>
+                <span class="time-colon">:</span>
+                <div class="digit-box">
+                  <label for="numend-m-break">الدقيقة</label>
+                  <input type="number" id="numend-m-break" class="form-input num digit-input" placeholder="00" min="0" max="59" oninput="updateNumericDurationPreview('break')">
+                </div>
+                <div class="digit-box digit-box-sm">
+                  <label for="numend-p-break">فترة</label>
+                  <select id="numend-p-break" class="form-select digit-select" onchange="updateNumericDurationPreview('break')">
+                    <option value="م">م</option>
+                    <option value="ص">ص</option>
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="quick-chips-row">
-            <span class="quick-chips-label">خيارات سريعة:</span>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('break', 5)">+5د</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('break', 10)">+10د</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('break', 15)">+15د</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('break', 20)">+20د</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('break', 30)">+30د</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('break', 45)">+45د</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('break', 60)">+1س (60د)</button>
+
+          <div class="numeric-calc-footer">
+            <div class="numeric-calc-badge" id="numcalc-break">
+              <span class="calc-icon">⏱️</span>
+              <span class="calc-text" id="numcalctext-break">اكتب ساعات ودقائق البداية والنهاية</span>
+            </div>
+            <button type="submit" class="btn btn-primary manual-submit-btn"><span data-icon="plus"></span><span>إضافة الجلسة</span></button>
           </div>
         </form>
       </div>
@@ -331,39 +433,90 @@
           <button type="button" class="manual-mode-tab active" id="tab-clock-sleep" onclick="setManualMode('sleep', 'clock')">
             <span data-icon="clock"></span><span>بالساعة (من - إلى)</span>
           </button>
-          <button type="button" class="manual-mode-tab" id="tab-duration-sleep" onclick="setManualMode('sleep', 'duration')">
-            <span data-icon="sparkle"></span><span>بالأرقام (دقائق/ساعات)</span>
+          <button type="button" class="manual-mode-tab" id="tab-numeric-sleep" onclick="setManualMode('sleep', 'numeric')">
+            <span data-icon="sparkle"></span><span>كتابة الأرقام (ساعات ودقائق)</span>
           </button>
         </div>
 
+        <!-- 1. الوضع الافتراضي: بالساعة (من - إلى) مع زر جلب آخر نشاط وزر الآن -->
         <form class="manual-clock-grid" id="clockform-sleep" onsubmit="event.preventDefault(); submitManualEntry('sleep');">
-          <div class="field"><label for="manualstart-sleep">من</label><input type="time" class="form-input" id="manualstart-sleep"></div>
-          <div class="field"><label for="manualend-sleep">إلى</label><input type="time" class="form-input" id="manualend-sleep"></div>
-          <button type="submit" class="btn btn-secondary manual-submit-btn" title="إضافة الجلسة"><span data-icon="plus"></span><span>إضافة</span></button>
+          <div class="field">
+            <div class="field-head-with-action">
+              <label for="manualstart-sleep">من</label>
+              <button type="button" class="btn-text-action" onclick="fillFromLastActivity('sleep')" title="جلب وقت نهاية آخر نشاط مسجل">🔄 من آخر نشاط</button>
+            </div>
+            <input type="time" class="form-input" id="manualstart-sleep">
+          </div>
+          <div class="field">
+            <div class="field-head-with-action">
+              <label for="manualend-sleep">إلى</label>
+              <button type="button" class="btn-text-action" onclick="fillCurrentTime('sleep')" title="ضبط على الوقت الحالي الآن">⏱️ الآن</button>
+            </div>
+            <input type="time" class="form-input" id="manualend-sleep">
+          </div>
+          <button type="submit" class="btn btn-primary manual-submit-btn" title="إضافة الجلسة"><span data-icon="plus"></span><span>إضافة</span></button>
         </form>
 
-        <form class="manual-duration-form" id="durationform-sleep" style="display:none;" onsubmit="event.preventDefault(); submitManualDurationEntry('sleep');">
-          <div class="duration-input-row">
-            <div class="field duration-field">
-              <label for="manualmins-sleep">مدة النوم بالدقائق</label>
-              <div class="duration-input-group">
-                <input type="number" class="form-input num" id="manualmins-sleep" placeholder="مثلاً: 420 (7 ساعات)" min="1" max="1440" step="1">
-                <span class="duration-unit">دقيقة</span>
+        <!-- 2. الوضع الثاني: كتابة الأرقام مباشرة (ساعات ودقائق) مع زر جلب آخر نشاط وعرض فوري للمدة -->
+        <form class="manual-numeric-form" id="numericform-sleep" style="display:none;" onsubmit="event.preventDefault(); submitNumericTimeEntry('sleep');">
+          <div class="numeric-times-row">
+            <div class="numeric-time-col">
+              <div class="field-head-with-action">
+                <span class="field-label-bold">من (بداية النوم):</span>
+                <button type="button" class="btn-text-action" onclick="fillFromLastActivity('sleep')" title="جلب وقت نهاية آخر نشاط مسجل">🔄 من آخر نشاط</button>
+              </div>
+              <div class="time-digit-inputs">
+                <div class="digit-box">
+                  <label for="numstart-h-sleep">الساعة</label>
+                  <input type="number" id="numstart-h-sleep" class="form-input num digit-input" placeholder="11" min="1" max="23" oninput="updateNumericDurationPreview('sleep')">
+                </div>
+                <span class="time-colon">:</span>
+                <div class="digit-box">
+                  <label for="numstart-m-sleep">الدقيقة</label>
+                  <input type="number" id="numstart-m-sleep" class="form-input num digit-input" placeholder="00" min="0" max="59" oninput="updateNumericDurationPreview('sleep')">
+                </div>
+                <div class="digit-box digit-box-sm">
+                  <label for="numstart-p-sleep">فترة</label>
+                  <select id="numstart-p-sleep" class="form-select digit-select" onchange="updateNumericDurationPreview('sleep')">
+                    <option value="م">م</option>
+                    <option value="ص">ص</option>
+                  </select>
+                </div>
               </div>
             </div>
-            <button type="submit" class="btn btn-primary manual-submit-btn" title="إضافة فورية">
-              <span data-icon="plus"></span><span>إضافة</span>
-            </button>
+
+            <div class="numeric-time-col">
+              <div class="field-head-with-action">
+                <span class="field-label-bold">إلى (الاستيقاظ):</span>
+                <button type="button" class="btn-text-action" onclick="fillCurrentTime('sleep')" title="ضبط على الوقت الحالي الآن">⏱️ الآن</button>
+              </div>
+              <div class="time-digit-inputs">
+                <div class="digit-box">
+                  <label for="numend-h-sleep">الساعة</label>
+                  <input type="number" id="numend-h-sleep" class="form-input num digit-input" placeholder="07" min="1" max="23" oninput="updateNumericDurationPreview('sleep')">
+                </div>
+                <span class="time-colon">:</span>
+                <div class="digit-box">
+                  <label for="numend-m-sleep">الدقيقة</label>
+                  <input type="number" id="numend-m-sleep" class="form-input num digit-input" placeholder="00" min="0" max="59" oninput="updateNumericDurationPreview('sleep')">
+                </div>
+                <div class="digit-box digit-box-sm">
+                  <label for="numend-p-sleep">فترة</label>
+                  <select id="numend-p-sleep" class="form-select digit-select" onchange="updateNumericDurationPreview('sleep')">
+                    <option value="ص">ص</option>
+                    <option value="م">م</option>
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
-          <div class="quick-chips-row">
-            <span class="quick-chips-label">خيارات سريعة:</span>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('sleep', 20)">+20د (قيلولة)</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('sleep', 45)">+45د</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('sleep', 90)">+1.5س</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('sleep', 180)">+3س</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('sleep', 360)">+6س</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('sleep', 420)">+7س</button>
-            <button type="button" class="quick-chip" onclick="quickFillMinutes('sleep', 480)">+8س</button>
+
+          <div class="numeric-calc-footer">
+            <div class="numeric-calc-badge" id="numcalc-sleep">
+              <span class="calc-icon">⏱️</span>
+              <span class="calc-text" id="numcalctext-sleep">اكتب ساعات ودقائق النوم والاستيقاظ</span>
+            </div>
+            <button type="submit" class="btn btn-primary manual-submit-btn"><span data-icon="plus"></span><span>تسجيل النوم</span></button>
           </div>
         </form>
       </div>
