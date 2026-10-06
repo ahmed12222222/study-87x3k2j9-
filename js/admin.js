@@ -567,16 +567,51 @@ function checkGoalCelebration(prevMinutes, newMinutes){
 function toggleManualForm(catKey){
   const form = document.getElementById(`manualform-${catKey}`);
   const btn = document.getElementById(`manualtoggle-${catKey}`);
+  if(!form || !btn) return;
   const willOpen = !form.classList.contains('open');
   form.classList.toggle('open', willOpen);
   btn.classList.toggle('open', willOpen);
+  // عند الفتح: التفعيل الافتراضي يكون على طريقة الساعة (من - إلى)
+  if(willOpen && !form.dataset.modeInitialized){
+    setManualMode(catKey, 'clock');
+    form.dataset.modeInitialized = 'true';
+  }
+}
+
+function setManualMode(catKey, mode){
+  const clockTab = document.getElementById(`tab-clock-${catKey}`);
+  const durationTab = document.getElementById(`tab-duration-${catKey}`);
+  const clockForm = document.getElementById(`clockform-${catKey}`);
+  const durationForm = document.getElementById(`durationform-${catKey}`);
+
+  const isDuration = (mode === 'duration');
+  if(clockTab) clockTab.classList.toggle('active', !isDuration);
+  if(durationTab) durationTab.classList.toggle('active', isDuration);
+  if(clockForm) clockForm.style.display = isDuration ? 'none' : 'grid';
+  if(durationForm) durationForm.style.display = isDuration ? 'flex' : 'none';
+
+  if(isDuration){
+    const minsInput = document.getElementById(`manualmins-${catKey}`);
+    if(minsInput) setTimeout(() => minsInput.focus(), 60);
+  } else {
+    const startInput = document.getElementById(`manualstart-${catKey}`);
+    if(startInput) setTimeout(() => startInput.focus(), 60);
+  }
+}
+
+function quickFillMinutes(catKey, minutes){
+  const minsInput = document.getElementById(`manualmins-${catKey}`);
+  if(minsInput){
+    minsInput.value = minutes;
+    minsInput.focus();
+  }
 }
 
 function submitManualEntry(catKey){
   const cat = CATS[catKey];
   const startInput = document.getElementById(`manualstart-${catKey}`);
   const endInput = document.getElementById(`manualend-${catKey}`);
-  if(!startInput.value || !endInput.value){ toast('حدد وقت البداية والنهاية', 'error'); return; }
+  if(!startInput || !endInput || !startInput.value || !endInput.value){ toast('حدد وقت البداية والنهاية', 'error'); return; }
   const base = new Date(currentDayKey + 'T00:00:00');
   const [sh, sm] = startInput.value.split(':').map(Number);
   const [eh, em] = endInput.value.split(':').map(Number);
@@ -597,6 +632,60 @@ function submitManualEntry(catKey){
   toast(crossedMidnight ? `${cat.addedToast} (تمتد لليوم الجاي 🌙)` : cat.addedToast, 'success');
   if(catKey === 'study' && currentDayKey === todayKey()) checkGoalCelebration(prevMinutes, prevMinutes + minutes);
 }
+
+function submitManualDurationEntry(catKey){
+  const cat = CATS[catKey];
+  const minsInput = document.getElementById(`manualmins-${catKey}`);
+  if(!minsInput) return;
+  const minutes = parseInt(minsInput.value, 10);
+  if(isNaN(minutes) || minutes <= 0){
+    toast('اكتب عدد الدقائق كرقم صحيح (مثلاً: 45)', 'error');
+    minsInput.focus();
+    return;
+  }
+  if(minutes > 1440){
+    toast('الحد الأقصى لجلسة واحدة هو 1440 دقيقة (24 ساعة)', 'error');
+    return;
+  }
+
+  let start, end;
+  if(currentDayKey === todayKey()){
+    end = new Date();
+    start = new Date(end.getTime() - minutes * 60000);
+  } else {
+    const base = new Date(currentDayKey + 'T14:00:00');
+    start = new Date(base.getTime() - (minutes / 2) * 60000);
+    end = new Date(start.getTime() + minutes * 60000);
+  }
+
+  const day = ensureDay(DATA, currentDayKey);
+  const prevMinutes = day[cat.arrayKey].reduce((s,x)=>s+x.minutes, 0);
+  const session = {
+    id: uid(),
+    start: start.toISOString(),
+    end: end.toISOString(),
+    minutes,
+    details: '',
+    source: 'manual'
+  };
+  day[cat.arrayKey].push(session);
+  persist();
+  renderAll();
+
+  minsInput.value = '';
+  toggleManualForm(catKey);
+  toast(`تمت إضافة ${formatDuration(minutes)} في ${cat.label} بنجاح ✓`, 'success');
+  if(catKey === 'study' && currentDayKey === todayKey()){
+    checkGoalCelebration(prevMinutes, prevMinutes + minutes);
+  }
+}
+
+// إتاحة الدوال على window للاستدعاء من أزرار HTML
+window.setManualMode = setManualMode;
+window.quickFillMinutes = quickFillMinutes;
+window.submitManualEntry = submitManualEntry;
+window.submitManualDurationEntry = submitManualDurationEntry;
+window.toggleManualForm = toggleManualForm;
 
 /* -------------------- قوائم الجلسات -------------------- */
 function renderTrackerSection(catKey){
@@ -1377,10 +1466,13 @@ function init(){
   fetchTodayVisits(true);
   setInterval(() => fetchTodayVisits(false), 7000);
 
-  document.getElementById('achieve-form').addEventListener('submit', (e) => { e.preventDefault(); addAchievement(); });
-  document.getElementById('manualform-study').addEventListener('submit', (e) => { e.preventDefault(); submitManualEntry('study'); });
-  document.getElementById('manualform-break').addEventListener('submit', (e) => { e.preventDefault(); submitManualEntry('break'); });
-  document.getElementById('manualform-sleep').addEventListener('submit', (e) => { e.preventDefault(); submitManualEntry('sleep'); });
+  document.getElementById('achieve-form')?.addEventListener('submit', (e) => { e.preventDefault(); addAchievement(); });
+  document.getElementById('clockform-study')?.addEventListener('submit', (e) => { e.preventDefault(); submitManualEntry('study'); });
+  document.getElementById('clockform-break')?.addEventListener('submit', (e) => { e.preventDefault(); submitManualEntry('break'); });
+  document.getElementById('clockform-sleep')?.addEventListener('submit', (e) => { e.preventDefault(); submitManualEntry('sleep'); });
+  document.getElementById('durationform-study')?.addEventListener('submit', (e) => { e.preventDefault(); submitManualDurationEntry('study'); });
+  document.getElementById('durationform-break')?.addEventListener('submit', (e) => { e.preventDefault(); submitManualDurationEntry('break'); });
+  document.getElementById('durationform-sleep')?.addEventListener('submit', (e) => { e.preventDefault(); submitManualDurationEntry('sleep'); });
 
   function closeAnyModal(id){ if(id === 'modal-day') closeDayModal(); else closeModal(id); }
   document.querySelectorAll('.modal-overlay').forEach(ov => {
@@ -1617,46 +1709,46 @@ function renderReportModal() {
     const timeRange = (startStr && endStr) ? `من ${startStr} إلى ${endStr}` : (startStr ? `بدأت: ${startStr}` : '');
     const det = s.details ? escapeHtml(s.details) : '';
     return `
-      <div style="font-size:0.82em;background:rgba(255,255,255,0.03);border:1px solid var(--border);padding:8px 10px;border-radius:8px;display:flex;flex-direction:column;gap:6px;">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
+      <div class="report-session-row">
+        <div class="report-session-info">
           <div>
             <b>${formatDuration(s.minutes)}</b>
-            ${timeRange ? `<span style="color:var(--text-dim);font-size:0.9em;margin-right:6px;">(${timeRange})</span>` : ''}
+            ${timeRange ? `<span class="report-session-time" style="margin-right:6px;">(${timeRange})</span>` : ''}
           </div>
-          ${s.date ? `<span style="color:var(--text-dim);font-size:0.75em;">${formatDateArabic(s.date).split(' ')[0]}</span>` : ''}
+          ${s.date ? `<span class="report-session-time" style="font-size:0.75em;">${formatDateArabic(s.date).split(' ')[0]}</span>` : ''}
         </div>
-        ${det ? `<div style="color:${color};font-size:0.85em;border-right:2px solid ${color};padding-right:8px;margin-right:2px;">${det}</div>` : ''}
+        ${det ? `<div class="report-session-detail" style="border-inline-start:3px solid ${color};">${det}</div>` : ''}
       </div>
     `;
   };
 
   body.innerHTML = `
-    <div style="display:flex;justify-content:center;gap:8px;margin-bottom:16px;">
+    <div class="report-scope-toggle">
       <button type="button" class="btn ${isDay ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="setReportScope('day')">تقرير اليوم</button>
       <button type="button" class="btn ${!isDay ? 'btn-primary' : 'btn-secondary'} btn-sm" onclick="setReportScope('week')">تقرير الأسبوع</button>
     </div>
 
-    <div class="card" style="background:var(--card-bg, rgba(255,255,255,0.04));border:1px solid var(--border);padding:14px;border-radius:12px;margin-bottom:14px;">
-      <div style="font-size:1.15em;font-weight:700;color:var(--text);margin-bottom:4px;">👤 ${escapeHtml(studentName)}</div>
-      <div style="font-size:0.85em;color:var(--text-dim);">🗓️ ${periodTitle}</div>
+    <div class="report-header-card">
+      <div style="font-size:1.05rem;font-weight:700;color:var(--text);">👤 ${escapeHtml(studentName)}</div>
+      <div style="font-size:0.82rem;color:var(--text-muted);font-weight:600;">🗓️ ${periodTitle}</div>
     </div>
 
-    <div style="display:grid;grid-template-columns:repeat(auto-fit, minmax(130px, 1fr));gap:10px;margin-bottom:16px;">
-      <div class="stat-card" style="padding:10px;">
+    <div class="report-stats-grid">
+      <div class="report-stat-card">
         <div class="stat-label">📚 دراسة</div>
-        <div class="stat-value" style="font-size:1.25em;color:var(--primary);">${formatDuration(totalStudy)}</div>
+        <div class="stat-value" style="color:var(--primary);">${formatDuration(totalStudy)}</div>
       </div>
-      <div class="stat-card" style="padding:10px;">
+      <div class="report-stat-card">
         <div class="stat-label">☕ استراحة</div>
-        <div class="stat-value" style="font-size:1.25em;color:var(--secondary);">${formatDuration(totalBreak)}</div>
+        <div class="stat-value" style="color:var(--secondary);">${formatDuration(totalBreak)}</div>
       </div>
-      <div class="stat-card" style="padding:10px;">
+      <div class="report-stat-card">
         <div class="stat-label">🛏️ نوم</div>
-        <div class="stat-value" style="font-size:1.25em;color:var(--success);">${formatDuration(totalSleep)}</div>
+        <div class="stat-value" style="color:var(--success);">${formatDuration(totalSleep)}</div>
       </div>
-      <div class="stat-card" style="padding:10px;">
+      <div class="report-stat-card">
         <div class="stat-label">⭐ نقاط</div>
-        <div class="stat-value" style="font-size:1.25em;color:var(--warning);">${totalPoints}</div>
+        <div class="stat-value" style="color:var(--warning);">${totalPoints}</div>
       </div>
     </div>
 
@@ -1674,11 +1766,11 @@ function renderReportModal() {
       </div>
     ` : '<div style="font-size:0.85em;color:var(--text-dim);margin-bottom:12px;">لا توجد مهام منجزة في هذه الفترة بعد.</div>'}
 
-    <div style="display:flex;flex-direction:column;gap:16px;">
+    <div style="display:flex;flex-direction:column;gap:14px;">
       ${studySessions.length > 0 ? `
         <div>
           <div style="font-size:0.9em;font-weight:bold;margin-bottom:8px;color:var(--primary);">📝 جلسات الدراسة (${studySessions.length})</div>
-          <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px;">
+          <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px;">
             ${studySessions.map(s => renderSessionHtml(s, 'var(--primary)')).join('')}
           </div>
         </div>
@@ -1687,7 +1779,7 @@ function renderReportModal() {
       ${breakSessions.length > 0 ? `
         <div>
           <div style="font-size:0.9em;font-weight:bold;margin-bottom:8px;color:var(--secondary);">☕ جلسات الاستراحة (${breakSessions.length})</div>
-          <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px;">
+          <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px;">
             ${breakSessions.map(s => renderSessionHtml(s, 'var(--secondary)')).join('')}
           </div>
         </div>
@@ -1696,7 +1788,7 @@ function renderReportModal() {
       ${sleepSessions.length > 0 ? `
         <div>
           <div style="font-size:0.9em;font-weight:bold;margin-bottom:8px;color:var(--success);">🛏️ جلسات النوم (${sleepSessions.length})</div>
-          <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:4px;">
+          <div style="max-height:220px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;padding-right:2px;">
             ${sleepSessions.map(s => renderSessionHtml(s, 'var(--success)')).join('')}
           </div>
         </div>

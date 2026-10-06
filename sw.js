@@ -1,5 +1,5 @@
 // sw.js — Service Worker لتشغيل تطبيق "إنجاز" بصورة مستقلة PWA
-const CACHE_NAME = 'injaz-pwa-v6';
+const CACHE_NAME = 'injaz-pwa-v8';
 
 const STATIC_ASSETS = [
   '/',

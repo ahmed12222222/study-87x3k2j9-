@@ -20,14 +20,6 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="إنجاز">
-<script>
-window.__pwaPrompt = null;
-window.addEventListener('beforeinstallprompt', function(e) {
-  e.preventDefault();
-  window.__pwaPrompt = e;
-  window.dispatchEvent(new CustomEvent('pwa-prompt-captured'));
-});
-</script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Almarai:wght@400;500;700;800&family=Reem+Kufi:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
@@ -48,18 +40,20 @@ window.addEventListener('beforeinstallprompt', function(e) {
 <div class="app-shell">
 
   <header class="topbar reveal">
-    <div class="brand">
-      <div class="brand-mark brand-mark-logo"><span data-icon="logo"></span></div>
-      <div class="brand-text">
-        <h1>إنجاز</h1>
-        <div class="role-tag"><span class="role-dot"></span><span>لوحة متابعة — <span id="brand-role-name">المذاكِر المجتهد</span></span></div>
+    <div class="topbar-header-row">
+      <div class="brand">
+        <div class="brand-mark brand-mark-logo"><span data-icon="logo"></span></div>
+        <div class="brand-text">
+          <h1>إنجاز</h1>
+          <div class="role-tag"><span class="role-dot"></span><span>لوحة متابعة — <span id="brand-role-name">المذاكِر المجتهد</span></span></div>
+        </div>
       </div>
-    </div>
-    <div class="topbar-meta">
       <div class="date-pill">
         <span id="today-date">—</span>
         <span class="clock num" id="live-clock">--:--</span>
       </div>
+    </div>
+    <div class="topbar-meta">
       <div class="topbar-actions">
         <div class="btn-icon ft-badge-btn ft-badge-static" id="ftBadgeViewer" data-ft-badge data-no-link="true" title="رتبة الأسبوع" aria-label="رتبة الأسبوع" style="cursor:default; pointer-events:none;"></div>
         <div class="theme-popover-wrap">
