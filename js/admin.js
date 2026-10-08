@@ -386,6 +386,92 @@ function renderStats(){
       : `${formatDuration(stats.studyMinutes)} من هدف ${formatDuration(stats.goalMinutes)} ${periodWord}`;
   }
   applyGoalLevelVisuals(stats);
+
+  // 1. تطبيق تحذيرات الاستراحة (4 ساعات أصفر، 7 ساعات أحمر)
+  applyBreakWarnings(stats.breakMinutes);
+
+  // 2. تطبيق تلوين وتقييم النوم (7س أبيض عادي، 8س أخضر جيد، 9س أصفر، 10س أحمر، 11س تحذير أقوى)
+  applySleepRatings(stats.sleepMinutes);
+
+  // 3. تطبيق تحذير نسبة الاستراحة إلى الدراسة (إذا الاستراحة >= 50% من الدراسة)
+  applyRatioWarning(stats.breakMinutes, stats.studyMinutes);
+}
+
+/* -------------------- تحذيرات وتلوين الاستراحة والنوم والنسبة -------------------- */
+function applyBreakWarnings(breakMinutes){
+  const card = document.getElementById('card-stat-break');
+  const badge = document.getElementById('badge-stat-break');
+  const trackerCard = document.querySelector('.tracker-card[data-cat="break"]');
+
+  const status = getBreakWarningStatus(breakMinutes);
+  if(card){
+    card.classList.remove('break-warning-yellow', 'break-warning-red');
+    if(status.cardClass) card.classList.add(status.cardClass);
+  }
+  if(badge){
+    badge.className = 'stat-status-badge';
+    if(status.active){
+      badge.textContent = status.text;
+      badge.classList.add(status.badgeClass);
+      badge.style.display = 'inline-flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+  if(trackerCard){
+    trackerCard.classList.remove('break-warning-yellow', 'break-warning-red');
+    if(status.cardClass) trackerCard.classList.add(status.cardClass);
+  }
+}
+
+function applySleepRatings(sleepMinutes){
+  const card = document.getElementById('card-stat-sleep');
+  const badge = document.getElementById('badge-stat-sleep');
+  const trackerCard = document.querySelector('.tracker-card[data-cat="sleep"]');
+
+  const status = getSleepRatingStatus(sleepMinutes);
+  if(card){
+    card.classList.remove('sleep-level-7', 'sleep-level-8', 'sleep-level-9', 'sleep-level-10', 'sleep-level-11');
+    if(status.cardClass) card.classList.add(status.cardClass);
+  }
+  if(badge){
+    badge.className = 'stat-status-badge';
+    if(status.active && status.text){
+      badge.textContent = status.text;
+      badge.classList.add(status.badgeClass);
+      badge.style.display = 'inline-flex';
+    } else {
+      badge.style.display = 'none';
+    }
+  }
+  if(trackerCard){
+    trackerCard.classList.remove('sleep-level-7', 'sleep-level-8', 'sleep-level-9', 'sleep-level-10', 'sleep-level-11');
+    if(status.cardClass) trackerCard.classList.add(status.cardClass);
+  }
+}
+
+let ratioWarningDismissed = false;
+function dismissRatioWarningForNow(){
+  ratioWarningDismissed = true;
+  const banner = document.getElementById('ratio-warning-card');
+  if(banner) banner.style.display = 'none';
+}
+
+function applyRatioWarning(breakMinutes, studyMinutes){
+  const banner = document.getElementById('ratio-warning-card');
+  if(!banner) return;
+  if(ratioWarningDismissed){
+    banner.style.display = 'none';
+    return;
+  }
+  const ratioStatus = getBreakToStudyRatioStatus(breakMinutes, studyMinutes);
+  if(ratioStatus && ratioStatus.active){
+    banner.className = `ratio-warning-card reveal severity-${ratioStatus.severity}`;
+    banner.innerHTML = renderRatioWarningHTML(ratioStatus, false);
+    banner.style.display = 'flex';
+  } else {
+    banner.style.display = 'none';
+  }
 }
 
 function renderTimeline(){
@@ -412,20 +498,33 @@ function startTickInterval(){
 function stopTickInterval(){
   if(tickInterval){ clearInterval(tickInterval); tickInterval = null; }
 }
+let activeBreak2HourAlertFired = false;
+
 function updateRunningTimerDisplay(){
   if(!DATA.activeTimer) return;
+  const elapsed = getActiveElapsedSeconds(DATA.activeTimer);
   const el = document.getElementById(`timerdisplay-${DATA.activeTimer.category}`);
-  if(el) el.textContent = formatStopwatch(getActiveElapsedSeconds(DATA.activeTimer));
+  if(el) el.textContent = formatStopwatch(elapsed);
   if(DATA.activeTimer.category !== 'sleep'){
     const jokerEl = document.getElementById('joker-timer-display');
-    if(jokerEl) jokerEl.textContent = formatStopwatch(getActiveElapsedSeconds(DATA.activeTimer));
+    if(jokerEl) jokerEl.textContent = formatStopwatch(elapsed);
   }
+
+  // تنبيه مكالمة الساعتين عند بلوغ الاستراحة المستمرة ساعتين كاملتين (7200 ثانية)
+  if(DATA.activeTimer.category === 'break'){
+    if(elapsed >= 7200 && !activeBreak2HourAlertFired){
+      activeBreak2HourAlertFired = true;
+      show2HourPhoneCallAlert('مرّت ساعتان كاملتان (120 دقيقة) من استراحتك الحالية المستمرة! الهدف ينتظرك واليوم ينقضي، حان وقت إنهاء الاستراحة والبدء بالدراسة فوراً.');
+    }
+  }
+
   tickCount++;
   if(tickCount % 20 === 0) renderTimeline(); // نوسّع القطعة الحية بخط اليوم كل ٢٠ ثانية تقريباً بدل كل ثانية توفيراً للأداء
 }
 
 function startTimer(catKey){
   if(DATA.activeTimer){ toast('فيه عداد شغال حالياً، خلّص منه أول', 'error'); return; }
+  activeBreak2HourAlertFired = false;
   DATA.activeTimer = { category: catKey, start: new Date().toISOString() };
   persistImmediate();
   renderAll();
@@ -434,6 +533,7 @@ function startTimer(catKey){
 
 function stopTimer(catKey){
   if(!DATA.activeTimer || DATA.activeTimer.category !== catKey) return;
+  activeBreak2HourAlertFired = false;
   const cat = CATS[catKey];
   const day = ensureDay(DATA);
   const prevMinutes = day[cat.arrayKey].reduce((s,x)=>s+x.minutes, 0);
@@ -454,6 +554,7 @@ function stopTimer(catKey){
 function cancelTimer(catKey){
   if(!DATA.activeTimer || DATA.activeTimer.category !== catKey) return;
   if(!confirm('تريد تلغي هذا العداد بدون ما تحفظ الجلسة؟')) return;
+  activeBreak2HourAlertFired = false;
   DATA.activeTimer = null;
   persistImmediate();
   stopTickInterval();
@@ -478,6 +579,7 @@ function closeoutActiveSegment(){
 
 function jokerStart(){
   if(DATA.activeTimer){ toast('فيه عداد شغال حالياً، خلّص منه أول', 'error'); return; }
+  activeBreak2HourAlertFired = false;
   DATA.activeTimer = { category: 'study', start: new Date().toISOString() };
   persistImmediate();
   renderAll();
@@ -487,6 +589,7 @@ function jokerStart(){
 // يبدّل بين دراسة واستراحة: يقفل الجلسة الحالية ويبدأ الثانية بنفس اللحظة بالضبط — صفر فجوة وقت بينهم
 function jokerToggle(){
   if(!DATA.activeTimer || DATA.activeTimer.category === 'sleep') return;
+  activeBreak2HourAlertFired = false;
   const nextCat = DATA.activeTimer.category === 'study' ? 'break' : 'study';
   closeoutActiveSegment();
   DATA.activeTimer = { category: nextCat, start: new Date().toISOString() };
@@ -888,7 +991,15 @@ function renderTrackerSection(catKey){
   const totalMin = sessions.reduce((s,x)=>s+x.minutes, 0);
 
   const totalEl = document.getElementById(`total-${catKey}`);
-  if(totalEl) totalEl.innerHTML = `<b class="num-inline">${formatDuration(totalMin)}</b> ${periodWord}`;
+  let totalHtml = `<b class="num-inline">${formatDuration(totalMin)}</b> ${periodWord}`;
+  if(catKey === 'break'){
+    const brkSt = getBreakWarningStatus(totalMin);
+    if(brkSt.active) totalHtml += ` <span class="stat-status-badge ${brkSt.badgeClass}">${brkSt.text}</span>`;
+  } else if(catKey === 'sleep'){
+    const slpSt = getSleepRatingStatus(totalMin);
+    if(slpSt.active && slpSt.text) totalHtml += ` <span class="stat-status-badge ${slpSt.badgeClass}">${slpSt.text}</span>`;
+  }
+  if(totalEl) totalEl.innerHTML = totalHtml;
 
   if(isDay){
     const isToday = currentDayKey === todayKey();
@@ -1018,14 +1129,16 @@ function openDayDetailModal(dayKey){
   currentDayModalKey = dayKey;
   const day = DATA.days[dayKey] || { study: [], breaks: [], sleep: [], achievements: [] };
   const stats = computeStats(day, DATA.settings);
+  const brkSt = getBreakWarningStatus(stats.breakMinutes);
+  const slpSt = getSleepRatingStatus(stats.sleepMinutes);
 
   document.getElementById('modal-day-title').textContent = formatDayLabel(dayKey);
 
   const statsHtml = `
     <div class="day-modal-stats">
       <div class="day-modal-stat"><span class="num-inline">${formatDuration(stats.studyMinutes)}</span><span>قراءة</span></div>
-      <div class="day-modal-stat"><span class="num-inline">${formatDuration(stats.breakMinutes)}</span><span>استراحة</span></div>
-      <div class="day-modal-stat"><span class="num-inline">${formatDuration(stats.sleepMinutes)}</span><span>نوم</span></div>
+      <div class="day-modal-stat ${brkSt.active ? brkSt.cardClass : ''}"><span class="num-inline" style="${brkSt.active ? `color:${brkSt.color};font-weight:bold;` : ''}">${formatDuration(stats.breakMinutes)}</span><span>استراحة ${brkSt.active ? `(${brkSt.text})` : ''}</span></div>
+      <div class="day-modal-stat ${slpSt.active && slpSt.cardClass ? slpSt.cardClass : ''}"><span class="num-inline" style="${slpSt.active && slpSt.color ? `color:${slpSt.color};font-weight:bold;` : ''}">${formatDuration(stats.sleepMinutes)}</span><span>نوم ${slpSt.active && slpSt.text ? `(${slpSt.text})` : ''}</span></div>
       <div class="day-modal-stat"><span class="num">${stats.percentage}%</span><span>إنجاز</span></div>
       <div class="day-modal-stat"><span class="num">${stats.points}</span><span>نقطة</span></div>
     </div>`;
@@ -1643,6 +1756,461 @@ function renderAll(){
   if(currentDayModalKey) openDayDetailModal(currentDayModalKey);
 }
 
+/* ============================================================
+   نظام إشعارات وتنبيهات الانقطاع والاستراحة التصاعدية
+   - 30 دقيقة: تذكير لطيف لاستعادة النشاط ☕
+   - 60 دقيقة: تنبيه أشد غير متهاون للعودة للكتاب ⚠️
+   - 90 دقيقة: تنبيه مشدد وجاد لكسر التسويف 🚨
+   - 120 دقيقة (ساعتان): تحذير شديد وقاطع لحفظ اليوم 🛑
+   - وكل 30 دقيقة بعد ذلك: تنبيه تصاعدي صارم
+   ============================================================ */
+let notifSoundEnabled = localStorage.getItem('injaz_notif_sound') !== 'false';
+let notifInAppEnabled = localStorage.getItem('injaz_notif_inapp') !== 'false';
+let inactivityMilestonesTriggered = {};
+let lastStudyActivityTimestamp = Date.now();
+let inactivityHeartbeatInterval = null;
+
+let phoneCallAudioCtx = null;
+let phoneCallTimeouts = [];
+let phoneCallIsRinging = false;
+
+/**
+ * محاكي رنين مكالمة هاتفية عاجلة للتحذير من استراحة الساعتين
+ * "اريد استراحه ساعتين مو بس انذار اريد يطلع صوت وياه شلون المكالمه تحذير قوي يعني بس الصوت مو عالي"
+ * نغمتان كلاسيكيتان متوافقتان (440Hz + 480Hz) مثل رنين الهاتف الأرضي/المحمول
+ * بصوت مريح وهادئ الحجم (gain: 0.08) غير مؤذٍ للأذن، لكنه واضح ومستمر ومتكرر
+ */
+function playPhoneCallRingtone(){
+  try {
+    stopPhoneCallRingtone(false);
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if(!AudioCtx) return;
+
+    phoneCallAudioCtx = new AudioCtx();
+    phoneCallIsRinging = true;
+
+    const masterGain = phoneCallAudioCtx.createGain();
+    masterGain.gain.setValueAtTime(1, phoneCallAudioCtx.currentTime);
+    masterGain.connect(phoneCallAudioCtx.destination);
+
+    // جدول رنات المكالمة: رنة مزدوجة (ترررن - ترررن) ثم فترة صمت وهكذا
+    const ringPattern = [
+      { start: 0.1,  dur: 0.75 },
+      { start: 1.1,  dur: 0.75 },
+      { start: 4.0,  dur: 0.75 },
+      { start: 5.0,  dur: 0.75 },
+      { start: 7.9,  dur: 0.75 },
+      { start: 8.9,  dur: 0.75 },
+      { start: 11.8, dur: 0.75 },
+      { start: 12.8, dur: 0.75 }
+    ];
+
+    const ctxNow = phoneCallAudioCtx.currentTime;
+
+    ringPattern.forEach(item => {
+      const t = ctxNow + item.start;
+      const dur = item.dur;
+
+      const osc1 = phoneCallAudioCtx.createOscillator();
+      const gain1 = phoneCallAudioCtx.createGain();
+      osc1.type = 'sine';
+      osc1.frequency.setValueAtTime(440, t);
+
+      const osc2 = phoneCallAudioCtx.createOscillator();
+      const gain2 = phoneCallAudioCtx.createGain();
+      osc2.type = 'sine';
+      osc2.frequency.setValueAtTime(480, t);
+
+      [gain1, gain2].forEach(g => {
+        g.gain.setValueAtTime(0.0001, t);
+        g.gain.linearRampToValueAtTime(0.08, t + 0.04);
+        g.gain.setValueAtTime(0.08, t + dur - 0.04);
+        g.gain.linearRampToValueAtTime(0.0001, t + dur);
+        g.connect(masterGain);
+      });
+
+      osc1.connect(gain1);
+      osc2.connect(gain2);
+
+      osc1.start(t);
+      osc1.stop(t + dur);
+      osc2.start(t);
+      osc2.stop(t + dur);
+    });
+
+    const autoStopTimeout = setTimeout(() => {
+      phoneCallIsRinging = false;
+    }, 15000);
+    phoneCallTimeouts.push(autoStopTimeout);
+
+  } catch(e) {}
+}
+
+function stopPhoneCallRingtone(hideModal = true){
+  phoneCallIsRinging = false;
+  phoneCallTimeouts.forEach(id => clearTimeout(id));
+  phoneCallTimeouts = [];
+
+  if(phoneCallAudioCtx){
+    try {
+      phoneCallAudioCtx.close();
+    } catch(e) {}
+    phoneCallAudioCtx = null;
+  }
+
+  if(hideModal){
+    const modal = document.getElementById('phone-call-alert-modal');
+    if(modal){
+      modal.classList.remove('show');
+      modal.style.display = 'none';
+    }
+  }
+}
+
+function show2HourPhoneCallAlert(reasonText){
+  const modal = document.getElementById('phone-call-alert-modal');
+  const msgEl = document.getElementById('phone-call-alert-msg');
+  if(msgEl && reasonText) msgEl.textContent = reasonText;
+  if(modal){
+    modal.classList.add('show');
+    modal.style.display = 'flex';
+  }
+  if(notifSoundEnabled){
+    playPhoneCallRingtone();
+  }
+}
+
+function respondTo2HourCall(){
+  stopPhoneCallRingtone(true);
+  if(DATA.activeTimer && DATA.activeTimer.category === 'break'){
+    closeoutActiveSegment();
+    DATA.activeTimer = { category: 'study', start: new Date().toISOString() };
+    persistImmediate();
+    renderAll();
+    startTickInterval();
+    toast('عاشت إيدك! أنهينا الاستراحة وبدأنا جلسة دراسة جديدة الآن 📚🔥', 'success');
+  } else if(!DATA.activeTimer){
+    startTimer('study');
+    toast('عاشت إيدك! بدأنا جلسة دراسة جديدة الآن 📚🔥', 'success');
+  } else {
+    toast('تم إيقاف الرنين، استمر في همتك 📚', 'info');
+  }
+}
+
+function testPhoneCallSound(){
+  show2HourPhoneCallAlert('هذه تجربة لرنين مكالمة تنبيه الساعتين 📞 — صوت رنين واضح وهادئ الحجم كما طلبت!');
+}
+
+function playAlertBeep(level){
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if(!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const now = ctx.currentTime;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+
+    if(level === 'reminder'){
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, now); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, now + 0.25); // A5
+      gain.gain.setValueAtTime(0.18, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.55);
+      osc.start(now);
+      osc.stop(now + 0.55);
+    } else if(level === 'warning'){
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(659.25, now); // E5
+      osc.frequency.setValueAtTime(880, now + 0.2); // A5
+      gain.gain.setValueAtTime(0.24, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.65);
+      osc.start(now);
+      osc.stop(now + 0.65);
+    } else if(level === 'high'){
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(440, now); // A4
+      osc.frequency.setValueAtTime(659.25, now + 0.2); // E5
+      osc.frequency.setValueAtTime(880, now + 0.4); // A5
+      gain.gain.setValueAtTime(0.28, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.85);
+      osc.start(now);
+      osc.stop(now + 0.85);
+    } else { // severe
+      osc.type = 'sawtooth';
+      osc.frequency.setValueAtTime(880, now);
+      osc.frequency.setValueAtTime(440, now + 0.18);
+      osc.frequency.setValueAtTime(880, now + 0.36);
+      osc.frequency.setValueAtTime(440, now + 0.54);
+      gain.gain.setValueAtTime(0.32, now);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.95);
+      osc.start(now);
+      osc.stop(now + 0.95);
+    }
+  } catch(e) {}
+}
+
+function showInAppInactivityToast(title, body, level, milestoneMins){
+  const existing = document.getElementById('inactivity-live-toast');
+  if(existing) existing.remove();
+
+  const iconMap = {
+    reminder: '☕',
+    warning: '⚠️',
+    high: '🚨',
+    severe: '🛑'
+  };
+
+  const toastEl = document.createElement('div');
+  toastEl.id = 'inactivity-live-toast';
+  toastEl.className = `inactivity-toast level-${level}`;
+  toastEl.innerHTML = `
+    <span class="inactivity-toast-icon">${iconMap[level] || '⏰'}</span>
+    <div class="inactivity-toast-content">
+      <div class="inactivity-toast-title">${escapeHtml(title)}</div>
+      <div class="inactivity-toast-body">${escapeHtml(body)}</div>
+      <div class="inactivity-toast-actions">
+        <button type="button" class="btn btn-primary btn-sm" onclick="startTimer('study'); document.getElementById('inactivity-live-toast')?.remove();">
+          <span>ابدأ الدراسة الآن</span>
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="document.getElementById('inactivity-live-toast')?.remove();">
+          <span>حسناً</span>
+        </button>
+      </div>
+    </div>
+    <button type="button" class="inactivity-toast-close" onclick="this.closest('.inactivity-toast').remove();" aria-label="إغلاق">
+      ✕
+    </button>
+  `;
+  document.body.appendChild(toastEl);
+
+  const dur = level === 'reminder' ? 25000 : 50000;
+  setTimeout(() => {
+    if(toastEl && toastEl.parentNode) toastEl.remove();
+  }, dur);
+}
+
+function triggerInactivityNotification(title, body, level, milestoneMins){
+  if(milestoneMins === 120){
+    show2HourPhoneCallAlert(body);
+  } else {
+    if(notifSoundEnabled){
+      playAlertBeep(level);
+    }
+    if(notifInAppEnabled){
+      showInAppInactivityToast(title, body, level, milestoneMins);
+    }
+  }
+  if('Notification' in window && Notification.permission === 'granted'){
+    try {
+      const notif = new Notification(title, {
+        body: body,
+        icon: 'favicon-32.png',
+        badge: 'favicon-32.png',
+        tag: 'injaz-inactivity-' + milestoneMins,
+        requireInteraction: (level === 'severe' || level === 'high' || milestoneMins === 120)
+      });
+      notif.onclick = () => {
+        window.focus();
+        notif.close();
+      };
+    } catch(e) {}
+  }
+}
+
+function checkInactivityAlerts(){
+  // 1. إذا كان يدرس حالياً -> تصفير الانقطاع فوراً
+  if(DATA.activeTimer && DATA.activeTimer.category === 'study'){
+    lastStudyActivityTimestamp = Date.now();
+    inactivityMilestonesTriggered = {};
+    const notifDot = document.getElementById('notif-badge-dot');
+    if(notifDot) notifDot.classList.remove('alerting');
+    const toastEl = document.getElementById('inactivity-live-toast');
+    if(toastEl) toastEl.remove();
+    return;
+  }
+
+  // 2. حساب دقائق الانقطاع
+  let inactivityMinutes = 0;
+  if(DATA.activeTimer && DATA.activeTimer.category === 'break'){
+    inactivityMinutes = Math.floor(getActiveElapsedSeconds(DATA.activeTimer) / 60);
+  } else {
+    const day = ensureDay(DATA, todayKey());
+    const studyList = (day.study || []).slice().filter(s => s.end).sort((a,b) => new Date(b.end) - new Date(a.end));
+    if(studyList.length > 0){
+      const lastEnd = new Date(studyList[0].end).getTime();
+      inactivityMinutes = Math.max(0, Math.floor((Date.now() - lastEnd) / 60000));
+    } else {
+      inactivityMinutes = Math.max(0, Math.floor((Date.now() - lastStudyActivityTimestamp) / 60000));
+    }
+  }
+
+  // 3. تحديث شارة الجرس في التوب بار
+  const notifDot = document.getElementById('notif-badge-dot');
+  if(notifDot){
+    if(inactivityMinutes >= 30){
+      notifDot.style.display = 'block';
+      if(inactivityMinutes >= 60) notifDot.classList.add('alerting');
+      else notifDot.classList.remove('alerting');
+    } else {
+      notifDot.style.display = 'none';
+      notifDot.classList.remove('alerting');
+    }
+  }
+
+  // 4. فحص العتبات التصاعدية
+  if(inactivityMinutes >= 30){
+    const currentMilestone = Math.floor(inactivityMinutes / 30) * 30;
+    const now = Date.now();
+    const lastTime = inactivityMilestonesTriggered[currentMilestone] || 0;
+
+    // تشغيل التنبيه إذا لم ينطلق لهذه العتبة خلال آخر 20 دقيقة
+    if(now - lastTime > 20 * 60 * 1000){
+      inactivityMilestonesTriggered[currentMilestone] = now;
+
+      let level = 'reminder';
+      let title = '';
+      let body = '';
+
+      if(currentMilestone === 30){
+        level = 'reminder';
+        title = '☕ تذكير: مرّت نصف ساعة استراحة';
+        body = 'صارلك 30 دقيقة ما تقره. استراحة كافية لتجديد النشاط، هل نعود لمواصلة الدراسة؟ 📚';
+      } else if(currentMilestone === 60){
+        level = 'warning';
+        title = '⚠️ تنبيه: مرّت ساعة كاملة بدون دراسة!';
+        body = 'صارلك 60 دقيقة منقطع عن المذاكرة! لا تدع الوقت يمر دون إنجاز، حان وقت استئناف الجلسة الآن 📚';
+      } else if(currentMilestone === 90){
+        level = 'high';
+        title = '🚨 تحذير جاد: مضت ساعة ونصف من الانقطاع!';
+        body = 'مضت 90 دقيقة كاملة بلا دراسة! حافظ على عزمك وادخل جلسة التركيز الآن قبل فوات اليوم!';
+      } else if(currentMilestone === 120){
+        level = 'severe';
+        title = '📞 مكالمة تنبيه: ساعتان كاملتان استراحة بلا دراسة!';
+        body = 'صارلك ساعتين ما تقره (120 دقيقة)! رنين مكالمة تنبيهية قوية لحفظ وقتك — افتح الكتاب وابدأ فوراً! 📚';
+      } else {
+        level = 'severe';
+        const hours = Math.floor(currentMilestone / 60);
+        title = `🛑 تحذير قاطع: مضت ${hours} ساعات بلا دراسة!`;
+        body = `انقطاعك وصل إلى ${formatDuration(currentMilestone)}! هدفك اليومي في خطر، تدارك الوقت الآن!`;
+      }
+
+      triggerInactivityNotification(title, body, level, currentMilestone);
+    }
+  }
+}
+
+function initInactivityMonitoring(){
+  if(inactivityHeartbeatInterval) clearInterval(inactivityHeartbeatInterval);
+  inactivityHeartbeatInterval = setInterval(checkInactivityAlerts, 5000);
+  checkInactivityAlerts();
+}
+
+function openNotificationModal(){
+  updateNotifPermUI();
+  showModal('modal-notifications');
+}
+
+function updateNotifPermUI(){
+  const statusTitle = document.getElementById('notif-perm-status-title');
+  const statusDesc = document.getElementById('notif-perm-status-desc');
+  const permIcon = document.getElementById('notif-perm-icon');
+  const btnReq = document.getElementById('btn-request-notif-perm');
+  const btnLabel = document.getElementById('btn-request-notif-label');
+  const soundCheckbox = document.getElementById('setting-notif-sound');
+  const inappCheckbox = document.getElementById('setting-notif-inapp');
+
+  if(soundCheckbox) soundCheckbox.checked = notifSoundEnabled;
+  if(inappCheckbox) inappCheckbox.checked = notifInAppEnabled;
+
+  if(!('Notification' in window)){
+    if(statusTitle) statusTitle.textContent = 'إشعارات المتصفح غير مدعومة';
+    if(statusDesc) statusDesc.textContent = 'المتصفح لا يدعم Web Notifications، ستعمل التنبيهات الصوتية وعبر الشاشة.';
+    if(permIcon) permIcon.textContent = 'ℹ️';
+    if(btnReq) btnReq.style.display = 'none';
+    return;
+  }
+
+  const perm = Notification.permission;
+  if(perm === 'granted'){
+    if(statusTitle) statusTitle.textContent = 'إشعارات المتصفح: مفعّلة بنجاح ✓';
+    if(statusDesc) statusDesc.textContent = 'تصلك تنبيهات حية فورية على سطح المكتب أو شاشة الهاتف عند الانقطاع.';
+    if(permIcon) permIcon.textContent = '✅';
+    if(btnReq){
+      btnReq.className = 'btn btn-secondary btn-sm';
+      if(btnLabel) btnLabel.textContent = 'الإشعارات تعمل بنجاح ✓';
+    }
+  } else if(perm === 'denied'){
+    if(statusTitle) statusTitle.textContent = 'إشعارات المتصفح: محظورة في المتصفح';
+    if(statusDesc) statusDesc.textContent = 'تم حظر الإذن سابقاً. لتفعيلها: اضغط على أيقونة القفل بجانب شريط العنوان وفعل الإشعارات.';
+    if(permIcon) permIcon.textContent = '🚫';
+    if(btnReq){
+      btnReq.className = 'btn btn-danger btn-sm';
+      if(btnLabel) btnLabel.textContent = 'محظورة في إعدادات المتصفح';
+    }
+  } else {
+    if(statusTitle) statusTitle.textContent = 'إشعارات المتصفح: بانتظار الإذن';
+    if(statusDesc) statusDesc.textContent = 'اضغط تفعيل لمنح المتصفح الإذن بإرسال تنبيهات التذكير عند الانقطاع.';
+    if(permIcon) permIcon.textContent = '🔔';
+    if(btnReq){
+      btnReq.className = 'btn btn-primary btn-sm';
+      if(btnLabel) btnLabel.textContent = 'تفعيل إشعارات المتصفح';
+      btnReq.style.display = 'inline-flex';
+    }
+  }
+}
+
+async function requestNotificationPermission(){
+  if(!('Notification' in window)){
+    toast('المتصفح لا يدعم إشعارات النظام، التنبيهات الصوتية والشاشة مفعّلة', 'info');
+    return;
+  }
+  try {
+    const res = await Notification.requestPermission();
+    updateNotifPermUI();
+    if(res === 'granted'){
+      toast('تم تفعيل إشعارات المتصفح بنجاح! سيتم تنبيهك عند الانقطاع ✓', 'success');
+      testInactivityNotification();
+    } else if(res === 'denied'){
+      toast('تم رفض إذن الإشعارات من إعدادات المتصفح', 'error');
+    }
+  } catch(e){
+    toast('تعذر طلب إذن الإشعارات', 'error');
+  }
+}
+
+function testInactivityNotification(){
+  triggerInactivityNotification(
+    '🔔 تجربة إشعار الانقطاع',
+    'هذا إشعار تجريبي لاختبار الصوت والتنبيهات. سيعمل التنبيه تلقائياً بعد نصف ساعة وساعة وساعتين من الانقطاع!',
+    'warning',
+    60
+  );
+  toast('تم إرسال إشعار تجريبي بنجاح! تفحص شاشتك والصوت ✓', 'success');
+}
+
+function toggleNotifSound(enabled){
+  notifSoundEnabled = !!enabled;
+  localStorage.setItem('injaz_notif_sound', notifSoundEnabled ? 'true' : 'false');
+  if(notifSoundEnabled) playAlertBeep('reminder');
+  toast(notifSoundEnabled ? 'تم تفعيل الصوت التنبيهي ✓' : 'تم كتم الصوت التنبيهي', 'info');
+}
+
+function toggleNotifInApp(enabled){
+  notifInAppEnabled = !!enabled;
+  localStorage.setItem('injaz_notif_inapp', notifInAppEnabled ? 'true' : 'false');
+  toast(notifInAppEnabled ? 'تم تفعيل التنبيهات على الشاشة ✓' : 'تم تعطيل تنبيهات الشاشة', 'info');
+}
+
+// إتاحة الدوال على window
+window.openNotificationModal = openNotificationModal;
+window.requestNotificationPermission = requestNotificationPermission;
+window.testInactivityNotification = testInactivityNotification;
+window.toggleNotifSound = toggleNotifSound;
+window.toggleNotifInApp = toggleNotifInApp;
+window.dismissRatioWarningForNow = dismissRatioWarningForNow;
+
 /* -------------------- الإقلاع -------------------- */
 function init(){
   hydrateIcons();
@@ -1657,6 +2225,8 @@ function init(){
   checkRemoteOnLoad();
   fetchTodayVisits(true);
   setInterval(() => fetchTodayVisits(false), 7000);
+  initInactivityMonitoring();
+  updateNotifPermUI();
 
   document.getElementById('achieve-form')?.addEventListener('submit', (e) => { e.preventDefault(); addAchievement(); });
   document.getElementById('clockform-study')?.addEventListener('submit', (e) => { e.preventDefault(); submitManualEntry('study'); });
@@ -1866,12 +2436,19 @@ function renderReportModal() {
     return `• ${formatDuration(s.minutes)} ${timeRange}${det}`;
   };
 
+  const brkStatus = getBreakWarningStatus(totalBreak);
+  const sleepStatus = getSleepRatingStatus(totalSleep);
+  const ratioStatus = getBreakToStudyRatioStatus(totalBreak, totalStudy);
+
   let plain = `📊 *تقرير إنجاز ودراسة: ${studentName}*\n`;
   plain += `🗓️ الفترة: ${periodTitle}\n`;
   plain += `━━━━━━━━━━━━━━━━━━━━━\n`;
   plain += `📚 وقت الدراسة: ${formatDuration(totalStudy)}\n`;
-  plain += `☕ وقت الاستراحة: ${formatDuration(totalBreak)}\n`;
-  plain += `🛏️ وقت النوم: ${formatDuration(totalSleep)}\n`;
+  plain += `☕ وقت الاستراحة: ${formatDuration(totalBreak)}${brkStatus.active ? ` (${brkStatus.text})` : ''}\n`;
+  plain += `🛏️ وقت النوم: ${formatDuration(totalSleep)}${sleepStatus.active && sleepStatus.text ? ` (${sleepStatus.text})` : ''}\n`;
+  if (ratioStatus && ratioStatus.active) {
+    plain += `⚠️ مؤشر التوازن: استراحتك تعادل ${ratioStatus.ratio}% من دراستك!\n`;
+  }
   plain += `⭐ مجموع النقاط: ${totalPoints} نقطة\n`;
   plain += `🎯 المهام المنجزة: ${doneAchieves.length} من ${doneAchieves.length + pendingAchieves.length}\n`;
 
@@ -1933,19 +2510,40 @@ function renderReportModal() {
         <div class="stat-label">📚 دراسة</div>
         <div class="stat-value" style="color:var(--primary);">${formatDuration(totalStudy)}</div>
       </div>
-      <div class="report-stat-card">
-        <div class="stat-label">☕ استراحة</div>
-        <div class="stat-value" style="color:var(--secondary);">${formatDuration(totalBreak)}</div>
+      <div class="report-stat-card ${brkStatus.active ? brkStatus.cardClass : ''}">
+        <div class="stat-label">☕ استراحة ${brkStatus.active ? `<span class="stat-status-badge ${brkStatus.badgeClass}">${brkStatus.text}</span>` : ''}</div>
+        <div class="stat-value" style="color:${brkStatus.active ? brkStatus.color : 'var(--secondary)'};">${formatDuration(totalBreak)}</div>
       </div>
-      <div class="report-stat-card">
-        <div class="stat-label">🛏️ نوم</div>
-        <div class="stat-value" style="color:var(--success);">${formatDuration(totalSleep)}</div>
+      <div class="report-stat-card ${sleepStatus.active && sleepStatus.cardClass ? sleepStatus.cardClass : ''}">
+        <div class="stat-label">🛏️ نوم ${sleepStatus.active && sleepStatus.text ? `<span class="stat-status-badge ${sleepStatus.badgeClass}">${sleepStatus.text}</span>` : ''}</div>
+        <div class="stat-value" style="color:${sleepStatus.active && sleepStatus.color ? sleepStatus.color : 'var(--success)'};">${formatDuration(totalSleep)}</div>
       </div>
       <div class="report-stat-card">
         <div class="stat-label">⭐ نقاط</div>
         <div class="stat-value" style="color:var(--warning);">${totalPoints}</div>
       </div>
     </div>
+
+    ${ratioStatus && ratioStatus.active ? `
+      <div class="ratio-warning-card severity-${ratioStatus.severity}" style="margin-bottom:14px;padding:12px 14px;">
+        <div class="ratio-warning-head">
+          <div class="ratio-warning-title" style="font-size:0.92rem;">
+            <span>${ratioStatus.severity === 'red' ? '🛑' : (ratioStatus.severity === 'orange' ? '🚨' : '⚠️')}</span>
+            <span>${escapeHtml(ratioStatus.title)}</span>
+          </div>
+          <span class="ratio-warning-badge stat-badge-${ratioStatus.severity === 'red' ? 'red' : 'yellow'}" style="font-size:0.75rem;">
+            ${escapeHtml(ratioStatus.badgeText)}
+          </span>
+        </div>
+        <div class="ratio-warning-sub" style="font-size:0.82rem;">${ratioStatus.desc}</div>
+        <div class="ratio-bar-wrapper">
+          <div class="ratio-bar-track" style="height:10px;">
+            <div class="ratio-bar-seg-study" style="width:${ratioStatus.studyPct}%;"></div>
+            <div class="ratio-bar-seg-break" style="width:${ratioStatus.breakPct}%;"></div>
+          </div>
+        </div>
+      </div>
+    ` : ''}
 
     ${doneAchieves.length > 0 ? `
       <div style="margin-bottom:14px;">

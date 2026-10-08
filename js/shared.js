@@ -200,6 +200,243 @@ function computeStats(dayObj, settings){
   return { studyMinutes, breakMinutes, sleepMinutes, doneCount, totalCount, percentage, points, goalMinutes, goalPercentage, tiers, tierLevel, allTiersDone };
 }
 
+/* -------------------- قواعد تحذير الاستراحة وتصنيف النوم ونسبة الدراسة -------------------- */
+/**
+ * تحذير الاستراحة:
+ * 4 ساعات فأكثر (>= 240 دقيقة) = لون أصفر
+ * 7 ساعات فأكثر (>= 420 دقيقة) = لون أحمر
+ * مع صياغة مخصصة لصفحة الأهل (index.html) مثل "ابنكم استراح..."
+ */
+function getBreakWarningStatus(breakMinutes, isViewer = false, studentName = ''){
+  breakMinutes = Number(breakMinutes) || 0;
+  const nameLabel = studentName || 'ابنكم';
+
+  if(breakMinutes >= 420){
+    return {
+      active: true,
+      level: 'red',
+      text: isViewer ? `7+ س (${nameLabel} استراح طويلاً 🚨)` : '7+ س (تحذير أحمر 🚨)',
+      badgeClass: 'stat-badge-red',
+      cardClass: 'break-warning-red',
+      color: '#f87171',
+      hoursLabel: '7+ ساعات'
+    };
+  }
+  if(breakMinutes >= 240){
+    return {
+      active: true,
+      level: 'yellow',
+      text: isViewer ? `4+ س (${nameLabel} بالاستراحة ⚠️)` : '4+ س (تحذير أصفر ⚠️)',
+      badgeClass: 'stat-badge-yellow',
+      cardClass: 'break-warning-yellow',
+      color: '#facc15',
+      hoursLabel: '4+ ساعات'
+    };
+  }
+  return { active: false, level: 'normal', text: '', badgeClass: '', cardClass: '', color: '', hoursLabel: '' };
+}
+
+/**
+ * تلوين وتصنيف النوم بدقة كما طلب المستخدم:
+ * 7 ساعات = أبيض عادي
+ * 8 ساعات = أخضر جيد
+ * 9 ساعات = أصفر أسوأ من العادي
+ * 10 ساعات = أحمر تحذير
+ * 11 ساعة فأكثر = تحذير أقوى
+ * مع تكييف الرسائل لصفحة الأهل إذا كان isViewer = true
+ */
+function getSleepRatingStatus(sleepMinutes, isViewer = false, studentName = ''){
+  sleepMinutes = Number(sleepMinutes) || 0;
+  if(sleepMinutes <= 0) return { active: false, level: 'none', text: '', badgeClass: '', cardClass: '', color: '' };
+
+  const nameLabel = studentName || 'ابنكم';
+  const hours = sleepMinutes / 60;
+  if(hours >= 11){
+    return {
+      active: true,
+      level: 'darkred',
+      text: isViewer ? `11+ س (تنبيه للأهل: ${nameLabel} أفرط بالنوم 🛑)` : '11+ س (تحذير أشد: نوم مفرط جداً 🛑)',
+      badgeClass: 'stat-badge-darkred',
+      cardClass: 'sleep-level-11',
+      color: '#ff6b6b'
+    };
+  }
+  if(hours >= 10){
+    return {
+      active: true,
+      level: 'red',
+      text: isViewer ? `10 س (أحمر: تحذير للأهل - ${nameLabel} نام كثيراً 🚨)` : '10 س (أحمر - تحذير: نوم مفرط 🚨)',
+      badgeClass: 'stat-badge-red',
+      cardClass: 'sleep-level-10',
+      color: '#f87171'
+    };
+  }
+  if(hours >= 9){
+    return {
+      active: true,
+      level: 'yellow',
+      text: isViewer ? `9 س (أصفر: ${nameLabel} نام أكثر من المعتاد ⚠️)` : '9 س (أصفر - أسوأ من العادي ⚠️)',
+      badgeClass: 'stat-badge-yellow',
+      cardClass: 'sleep-level-9',
+      color: '#facc15'
+    };
+  }
+  if(hours >= 8){
+    return {
+      active: true,
+      level: 'green',
+      text: isViewer ? `8 س (أخضر: نوم ${nameLabel} مثالي ✨)` : '8 س (أخضر - جيد ومثالي ✨)',
+      badgeClass: 'stat-badge-green',
+      cardClass: 'sleep-level-8',
+      color: '#4ade80'
+    };
+  }
+  if(hours >= 7){
+    return {
+      active: true,
+      level: 'white',
+      text: isViewer ? `7 س (أبيض: نوم ${nameLabel} طبيعي)` : '7 س (أبيض - عادي وطبيعي)',
+      badgeClass: 'stat-badge-white',
+      cardClass: 'sleep-level-7',
+      color: '#ffffff'
+    };
+  }
+  return {
+    active: true,
+    level: 'short',
+    text: isViewer ? `${formatDuration(sleepMinutes)} (نوم ${nameLabel} قليل)` : `${formatDuration(sleepMinutes)} (أقل من 7 س)`,
+    badgeClass: 'stat-badge-white',
+    cardClass: '',
+    color: '#cbd5e1'
+  };
+}
+
+/**
+ * تحذير نسبة الاستراحة إلى الدراسة:
+ * إذا كانت النسبة بين الاستراحة والدراسة من 50% وأكثر (الاستراحة أكثر أو تقارب الدراسة)
+ * تكييف النص لصفحة الأهل (isViewer = true) بصيغة "ابنكم/ولدكم"
+ */
+function getBreakToStudyRatioStatus(breakMinutes, studyMinutes, isViewer = false, studentName = ''){
+  breakMinutes = Number(breakMinutes) || 0;
+  studyMinutes = Number(studyMinutes) || 0;
+
+  if(breakMinutes < 25) return { active: false };
+
+  let ratio = 0;
+  if(studyMinutes > 0){
+    ratio = Math.round((breakMinutes / studyMinutes) * 100);
+  } else {
+    ratio = 100;
+  }
+
+  if(ratio < 50) return { active: false, ratio };
+
+  const totalMin = Math.max(1, studyMinutes + breakMinutes);
+  const studyPct = Math.round((studyMinutes / totalMin) * 100);
+  const breakPct = 100 - studyPct;
+  const nameLabel = studentName || 'ابنكم';
+  const sonLabel = studentName || 'ولدكم';
+
+  let severity = 'yellow';
+  let title = '';
+  let desc = '';
+  let badgeText = '';
+
+  if(isViewer){
+    if(ratio >= 100){
+      severity = 'red';
+      title = `🛑 إنذار عاجل للأهل: ${sonLabel} استراح اليوم أكثر مما درس!`;
+      desc = `إنذار للأهل الكرام: وقت استراحة ${sonLabel} (${formatDuration(breakMinutes)}) <b>تجاوز وقت دراسته (${formatDuration(studyMinutes)}) بالكامل</b> بنسبة <b>${ratio}%</b>! لقد قضى معظم وقته بالراحة ولم ينجز كفاية اليوم، يرجى حثه ومتابعته لمواصلة دراسته فوراً.`;
+      badgeText = 'إنذار للأهل: الاستراحة غلبت الدراسة';
+    } else if(ratio >= 70){
+      severity = 'orange';
+      title = `🚨 تحذير للأهل: استراحة ${nameLabel} أصبحت طويلة جداً اليوم!`;
+      desc = `تنبيه للأهل الكرام: وقت استراحة ${nameLabel} وصل إلى <b>${ratio}%</b> من وقت دراسته (${formatDuration(breakMinutes)} استراحة مقابل ${formatDuration(studyMinutes)} دراسة)! كفّة الاستراحة تقارب دراسته، حبذا لو تذكروه وتطمئنون عليه بلطف.`;
+      badgeText = `تحذير للأهل: ${ratio}%`;
+    } else {
+      severity = 'yellow';
+      title = `⚠️ تنبيه للأهل: وقت استراحة ${nameLabel} وصل لنصف وقت دراسته!`;
+      desc = `أهلاً بكم.. ${nameLabel} قضى في الاستراحة ما يعادل <b>${ratio}%</b> من وقت دراسته اليوم (${formatDuration(breakMinutes)} استراحة مقابل ${formatDuration(studyMinutes)} دراسة). يمكنكم تشجيعه بلطف للعودة لكتبه.`;
+      badgeText = `تنبيه للأهل: ${ratio}%`;
+    }
+  } else {
+    if(ratio >= 100){
+      severity = 'red';
+      title = '🛑 إنذار أحمر: الاستراحة تجاوزت وقت الدراسة بالكامل!';
+      desc = `وقت الاستراحة (${formatDuration(breakMinutes)}) أصبح <b>أكثر من وقت الدراسة (${formatDuration(studyMinutes)})</b> بنسبة <b>${ratio}%</b>! قضيت وقتاً بالراحة أكثر من العلم اليوم، حان وقت إيقاف الاستراحة فوراً.`;
+      badgeText = `${ratio}% (الاستراحة أكثر!)`;
+    } else if(ratio >= 70){
+      severity = 'orange';
+      title = '🚨 تحذير جاد: كفّة الاستراحة أصبحت ثقيلة جداً اليوم!';
+      desc = `استراحتك وصلت إلى <b>${ratio}%</b> من وقت دراستك! اقتربت من أن تبتلع يومك، انهض الآن واستأنف الدراسة لتعديل الكفّة.`;
+      badgeText = `${ratio}% من الدراسة`;
+    } else {
+      severity = 'yellow';
+      title = '⚠️ مؤشر التوازن: استراحتك تعادل نصف وقت دراستك!';
+      desc = `وقت استراحتك بلغ <b>${ratio}%</b> مقارنة بوقت دراستك (${formatDuration(breakMinutes)} استراحة مقابل ${formatDuration(studyMinutes)} دراسة). انتبه لتوزيع وقتك.`;
+      badgeText = `${ratio}% من الدراسة`;
+    }
+  }
+
+  return {
+    active: true,
+    ratio,
+    severity,
+    title,
+    desc,
+    badgeText,
+    breakMinutes,
+    studyMinutes,
+    studyPct,
+    breakPct,
+    isViewer
+  };
+}
+
+/**
+ * توليد HTML لبطاقة تحذير النسبة
+ */
+function renderRatioWarningHTML(ratioStatus, isViewer = false){
+  if(!ratioStatus || !ratioStatus.active) return '';
+  return `
+    <div class="ratio-warning-head">
+      <div class="ratio-warning-title">
+        <span>${ratioStatus.severity === 'red' ? '🛑' : (ratioStatus.severity === 'orange' ? '🚨' : '⚠️')}</span>
+        <span>${escapeHtml(ratioStatus.title)}</span>
+      </div>
+      <span class="ratio-warning-badge stat-badge-${ratioStatus.severity === 'red' ? 'red' : 'yellow'}">
+        ${escapeHtml(ratioStatus.badgeText)}
+      </span>
+    </div>
+    <div class="ratio-warning-sub">${ratioStatus.desc}</div>
+    <div class="ratio-bar-wrapper">
+      <div class="ratio-bar-track">
+        <div class="ratio-bar-seg-study" style="width:${ratioStatus.studyPct}%;" title="دراسة: ${formatDuration(ratioStatus.studyMinutes)}"></div>
+        <div class="ratio-bar-seg-break" style="width:${ratioStatus.breakPct}%;" title="استراحة: ${formatDuration(ratioStatus.breakMinutes)}"></div>
+      </div>
+      <div class="ratio-bar-labels">
+        <span>📚 دراسة: <b>${formatDuration(ratioStatus.studyMinutes)}</b> (${ratioStatus.studyPct}%)</span>
+        <span>☕ استراحة: <b>${formatDuration(ratioStatus.breakMinutes)}</b> (${ratioStatus.breakPct}%)</span>
+      </div>
+    </div>
+    ${isViewer ? `
+      <div class="ratio-family-note">
+        💡 <b>ملاحظة للأهل:</b> تشجيعكم اللطيف وتذكيركم له بهدفه الدراسي يصنع فرقاً كبيراً اليوم.
+      </div>
+    ` : `
+      <div class="ratio-actions-row">
+        <button type="button" class="btn btn-primary btn-sm" onclick="startTimer('study')">
+          <span data-icon="play"></span>
+          <span>ابدأ جلسة دراسة الآن لقلب الميزان 🔥</span>
+        </button>
+        <button type="button" class="btn btn-secondary btn-sm" onclick="dismissRatioWarningForNow()">
+          <span>إخفاء مؤقت</span>
+        </button>
+      </div>
+    `}
+  `;
+}
+
 function getActiveElapsedSeconds(activeTimer){
   if(!activeTimer) return 0;
   return Math.max(0, Math.floor((Date.now() - new Date(activeTimer.start).getTime())/1000));

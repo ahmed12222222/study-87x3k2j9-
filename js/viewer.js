@@ -140,6 +140,8 @@ function setPeriod(period){
 
 function renderViewerStats(){
   const stats = getViewerScopedView().stats;
+  const studentName = (VDATA && VDATA.settings && VDATA.settings.studentName) || 'ابنكم';
+
   animateCountUp(document.getElementById('stat-study'), stats.studyMinutes, { formatter: formatDuration });
   animateCountUp(document.getElementById('stat-break'), stats.breakMinutes, { formatter: formatDuration });
   animateCountUp(document.getElementById('stat-sleep'), stats.sleepMinutes, { formatter: formatDuration });
@@ -151,10 +153,61 @@ function renderViewerStats(){
   if(goalLabel){
     const periodWord = { day: 'اليوم', week: 'هالأسبوع', month: 'هالشهر' }[currentPeriod];
     goalLabel.textContent = stats.allTiersDone
-      ? `${formatDuration(stats.studyMinutes)} — خلّص كل أهداف ${periodWord} 🔥`
+      ? `${formatDuration(stats.studyMinutes)} — ابنكم خلّص كل أهداف ${periodWord} 🔥`
       : `${formatDuration(stats.studyMinutes)} من هدف ${formatDuration(stats.goalMinutes)} ${periodWord}`;
   }
   applyGoalLevelVisuals(stats);
+
+  // تطبيق تحذيرات الاستراحة للمشاهدين (الأهل)
+  const brkCard = document.getElementById('card-stat-break');
+  const brkBadge = document.getElementById('badge-stat-break');
+  const brkStatus = getBreakWarningStatus(stats.breakMinutes, true, studentName);
+  if(brkCard){
+    brkCard.classList.remove('break-warning-yellow', 'break-warning-red');
+    if(brkStatus.cardClass) brkCard.classList.add(brkStatus.cardClass);
+  }
+  if(brkBadge){
+    brkBadge.className = 'stat-status-badge';
+    if(brkStatus.active){
+      brkBadge.textContent = brkStatus.text;
+      brkBadge.classList.add(brkStatus.badgeClass);
+      brkBadge.style.display = 'inline-flex';
+    } else {
+      brkBadge.style.display = 'none';
+    }
+  }
+
+  // تطبيق تلوين وتقييم النوم للمشاهدين (الأهل)
+  const sleepCard = document.getElementById('card-stat-sleep');
+  const sleepBadge = document.getElementById('badge-stat-sleep');
+  const sleepStatus = getSleepRatingStatus(stats.sleepMinutes, true, studentName);
+  if(sleepCard){
+    sleepCard.classList.remove('sleep-level-7', 'sleep-level-8', 'sleep-level-9', 'sleep-level-10', 'sleep-level-11');
+    if(sleepStatus.cardClass) sleepCard.classList.add(sleepStatus.cardClass);
+  }
+  if(sleepBadge){
+    sleepBadge.className = 'stat-status-badge';
+    if(sleepStatus.active && sleepStatus.text){
+      sleepBadge.textContent = sleepStatus.text;
+      sleepBadge.classList.add(sleepStatus.badgeClass);
+      sleepBadge.style.display = 'inline-flex';
+    } else {
+      sleepBadge.style.display = 'none';
+    }
+  }
+
+  // بطاقة تحذير النسبة للمشاهدين (الأهل)
+  const ratioBanner = document.getElementById('ratio-warning-card');
+  if(ratioBanner){
+    const ratioStatus = getBreakToStudyRatioStatus(stats.breakMinutes, stats.studyMinutes, true, studentName);
+    if(ratioStatus && ratioStatus.active){
+      ratioBanner.className = `ratio-warning-card reveal severity-${ratioStatus.severity}`;
+      ratioBanner.innerHTML = renderRatioWarningHTML(ratioStatus, true);
+      ratioBanner.style.display = 'flex';
+    } else {
+      ratioBanner.style.display = 'none';
+    }
+  }
 }
 
 function renderViewerTimeline(){
@@ -175,8 +228,18 @@ function renderViewerSessions(catKey){
   const isDay = currentPeriod === 'day';
   const periodWord = { day: 'اليوم', week: 'هالأسبوع', month: 'هالشهر' }[currentPeriod];
   const sessions = getViewerScopedView()[cat.arrayKey];
+  const studentName = (VDATA && VDATA.settings && VDATA.settings.studentName) || 'ابنكم';
   const totalEl = document.getElementById(`total-${catKey}`);
-  if(totalEl) totalEl.innerHTML = `<b class="num-inline">${formatDuration(sessions.reduce((s,x)=>s+x.minutes,0))}</b> ${periodWord}`;
+  const totalMin = sessions.reduce((s,x)=>s+x.minutes,0);
+  let totalHtml = `<b class="num-inline">${formatDuration(totalMin)}</b> ${periodWord}`;
+  if(catKey === 'break'){
+    const brkSt = getBreakWarningStatus(totalMin, true, studentName);
+    if(brkSt.active) totalHtml += ` <span class="stat-status-badge ${brkSt.badgeClass}">${brkSt.text}</span>`;
+  } else if(catKey === 'sleep'){
+    const slpSt = getSleepRatingStatus(totalMin, true, studentName);
+    if(slpSt.active && slpSt.text) totalHtml += ` <span class="stat-status-badge ${slpSt.badgeClass}">${slpSt.text}</span>`;
+  }
+  if(totalEl) totalEl.innerHTML = totalHtml;
   const listEl = document.getElementById(`sessionlist-${catKey}`);
   if(!listEl) return;
   if(sessions.length === 0){
@@ -269,8 +332,36 @@ function updateLiveTimerDisplay(){
 function tickLiveTimerDisplay(){
   const active = VDATA && VDATA.activeTimer;
   if(!active) return;
+  const elapsed = getActiveElapsedSeconds(active);
   const el = document.getElementById(`livetimer-${active.category}-clock`);
-  if(el) el.textContent = formatStopwatch(getActiveElapsedSeconds(active));
+  if(el) el.textContent = formatStopwatch(elapsed);
+
+  // تنبيه الأهل إذا كانت استراحة ابنهم الحالية تجاوزت الساعتين
+  if(active.category === 'break'){
+    const box = document.getElementById('livetimer-break');
+    let warnBadge = document.getElementById('livetimer-break-warn');
+    if(elapsed >= 7200){
+      if(!warnBadge && box){
+        warnBadge = document.createElement('span');
+        warnBadge.id = 'livetimer-break-warn';
+        warnBadge.className = 'stat-status-badge stat-badge-yellow';
+        warnBadge.style.marginInlineStart = '8px';
+        box.appendChild(warnBadge);
+      }
+      if(warnBadge){
+        if(elapsed >= 14400){
+          warnBadge.className = 'stat-status-badge stat-badge-red';
+          warnBadge.textContent = '4+ س استراحة 🚨';
+        } else {
+          warnBadge.className = 'stat-status-badge stat-badge-yellow';
+          warnBadge.textContent = 'ساعتان استراحة ⚠️';
+        }
+        warnBadge.style.display = 'inline-flex';
+      }
+    } else if(warnBadge){
+      warnBadge.style.display = 'none';
+    }
+  }
 }
 
 /* -------------------- لوحة عرض الملاحظة -------------------- */
@@ -293,17 +384,27 @@ function openViewerDayModal(dayKey){
   const settings = VDATA ? VDATA.settings : defaultData().settings;
   const day = (VDATA && VDATA.days[dayKey]) || { study: [], breaks: [], sleep: [], achievements: [] };
   const stats = computeStats(day, settings);
+  const studentName = settings.studentName || 'ابنكم';
+
+  const brkSt = getBreakWarningStatus(stats.breakMinutes, true, studentName);
+  const slpSt = getSleepRatingStatus(stats.sleepMinutes, true, studentName);
+  const ratioSt = getBreakToStudyRatioStatus(stats.breakMinutes, stats.studyMinutes, true, studentName);
 
   document.getElementById('modal-day-title').textContent = formatDayLabel(dayKey);
 
   const statsHtml = `
     <div class="day-modal-stats">
       <div class="day-modal-stat"><span class="num-inline">${formatDuration(stats.studyMinutes)}</span><span>قراءة</span></div>
-      <div class="day-modal-stat"><span class="num-inline">${formatDuration(stats.breakMinutes)}</span><span>استراحة</span></div>
-      <div class="day-modal-stat"><span class="num-inline">${formatDuration(stats.sleepMinutes)}</span><span>نوم</span></div>
+      <div class="day-modal-stat"><span class="num-inline">${formatDuration(stats.breakMinutes)}</span><span>استراحة ${brkSt.active ? `<b style="color:${brkSt.color};font-size:0.75rem;">(${brkSt.text})</b>` : ''}</span></div>
+      <div class="day-modal-stat"><span class="num-inline">${formatDuration(stats.sleepMinutes)}</span><span>نوم ${slpSt.active ? `<b style="color:${slpSt.color};font-size:0.75rem;">(${slpSt.text})</b>` : ''}</span></div>
       <div class="day-modal-stat"><span class="num">${stats.percentage}%</span><span>إنجاز</span></div>
       <div class="day-modal-stat"><span class="num">${stats.points}</span><span>نقطة</span></div>
-    </div>`;
+    </div>
+    ${ratioSt.active ? `
+      <div class="ratio-warning-card severity-${ratioSt.severity}" style="margin: 10px 0;">
+        ${renderRatioWarningHTML(ratioSt, true)}
+      </div>
+    ` : ''}`;
 
   const sectionsHtml = VIEWER_CAT_ORDER.map(catKey => {
     const cat = VIEWER_CATS[catKey];

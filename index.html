@@ -84,32 +84,41 @@
     </div>
 
     <section class="stats-grid reveal" style="animation-delay:.05s">
-      <div class="stat-card">
+      <div class="stat-card" id="card-stat-study">
         <div class="stat-top"><span class="stat-icon tint-primary" data-icon="book"></span></div>
         <span class="stat-value num-inline" id="stat-study">0 د</span>
-        <span class="stat-label">قراءة اليوم</span>
+        <span class="stat-label" id="label-stat-study">قراءة ابنكم</span>
       </div>
-      <div class="stat-card">
-        <div class="stat-top"><span class="stat-icon tint-secondary" data-icon="coffee"></span></div>
+      <div class="stat-card" id="card-stat-break">
+        <div class="stat-top">
+          <span class="stat-icon tint-secondary" data-icon="coffee"></span>
+          <span class="stat-status-badge" id="badge-stat-break" style="display:none;"></span>
+        </div>
         <span class="stat-value num-inline" id="stat-break">0 د</span>
-        <span class="stat-label">استراحة اليوم</span>
+        <span class="stat-label" id="label-stat-break">استراحة ابنكم</span>
       </div>
-      <div class="stat-card">
-        <div class="stat-top"><span class="stat-icon tint-success" data-icon="bed"></span></div>
+      <div class="stat-card" id="card-stat-sleep">
+        <div class="stat-top">
+          <span class="stat-icon tint-success" data-icon="bed"></span>
+          <span class="stat-status-badge" id="badge-stat-sleep" style="display:none;"></span>
+        </div>
         <span class="stat-value num-inline" id="stat-sleep">0 د</span>
-        <span class="stat-label">نوم اليوم</span>
+        <span class="stat-label" id="label-stat-sleep">نوم ابنكم</span>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" id="card-stat-percent">
         <div class="stat-top"><span class="stat-icon tint-success" data-icon="chart"></span></div>
         <span class="stat-value num" id="stat-percent">0%</span>
-        <span class="stat-label">إنجاز اليوم</span>
+        <span class="stat-label">إنجاز ابنكم</span>
       </div>
-      <div class="stat-card">
+      <div class="stat-card" id="card-stat-points">
         <div class="stat-top"><span class="stat-icon tint-warning" data-icon="sparkle"></span></div>
         <span class="stat-value num" id="stat-points">0</span>
-        <span class="stat-label">نقاط اليوم</span>
+        <span class="stat-label">نقاط ابنكم</span>
       </div>
     </section>
+
+    <!-- بطاقة تحذير نسبة الاستراحة إلى الدراسة للمشاهدين -->
+    <section class="ratio-warning-card reveal" id="ratio-warning-card" style="display:none; animation-delay:.08s;"></section>
 
     <section class="card timeline-card reveal" style="animation-delay:.1s">
       <div class="card-head">
@@ -117,7 +126,7 @@
           <span class="card-icon" data-icon="clock"></span>
           <div>
             <div class="card-title">خط اليوم</div>
-            <div class="card-sub" id="timeline-sub">شكل اليوم بلمحة وحدة — من 12 بالليل ل12 بالليل</div>
+            <div class="card-sub" id="timeline-sub">نشاط ابنكم على مدار اليوم بلمحة واحدة للأهل</div>
           </div>
         </div>
         <div class="timeline-legend">
@@ -148,13 +157,13 @@
           <div class="card-head-left">
             <span class="card-icon" data-icon="book"></span>
             <div>
-              <div class="card-title">دراستي</div>
+              <div class="card-title" id="title-tracker-study">دراسة ابنكم</div>
               <div class="card-sub tracker-total" id="total-study">0 د اليوم</div>
             </div>
           </div>
         </div>
         <div class="viewer-live-timer" id="livetimer-study" style="display:none">
-          <span class="live-dot"></span><span>يقرأ الآن</span><span class="num live-clock" id="livetimer-study-clock">00:00:00</span>
+          <span class="live-dot"></span><span>ابنكم يقرأ الآن</span><span class="num live-clock" id="livetimer-study-clock">00:00:00</span>
         </div>
         <ul class="session-list" id="sessionlist-study" style="max-height:320px"></ul>
       </div>
@@ -164,13 +173,13 @@
           <div class="card-head-left">
             <span class="card-icon" data-icon="coffee"></span>
             <div>
-              <div class="card-title">استراحاتي</div>
+              <div class="card-title" id="title-tracker-break">استراحات ابنكم</div>
               <div class="card-sub tracker-total" id="total-break">0 د اليوم</div>
             </div>
           </div>
         </div>
         <div class="viewer-live-timer" id="livetimer-break" style="display:none">
-          <span class="live-dot"></span><span>يستريح الآن</span><span class="num live-clock" id="livetimer-break-clock">00:00:00</span>
+          <span class="live-dot"></span><span>ابنكم يستريح الآن</span><span class="num live-clock" id="livetimer-break-clock">00:00:00</span>
         </div>
         <ul class="session-list" id="sessionlist-break" style="max-height:320px"></ul>
       </div>
@@ -180,13 +189,13 @@
           <div class="card-head-left">
             <span class="card-icon" data-icon="bed"></span>
             <div>
-              <div class="card-title">نومي</div>
+              <div class="card-title" id="title-tracker-sleep">نوم ابنكم</div>
               <div class="card-sub tracker-total" id="total-sleep">0 د اليوم</div>
             </div>
           </div>
         </div>
         <div class="viewer-live-timer" id="livetimer-sleep" style="display:none">
-          <span class="live-dot"></span><span>ينام الآن</span><span class="num live-clock" id="livetimer-sleep-clock">00:00:00</span>
+          <span class="live-dot"></span><span>ابنكم ينام الآن</span><span class="num live-clock" id="livetimer-sleep-clock">00:00:00</span>
         </div>
         <ul class="session-list" id="sessionlist-sleep" style="max-height:320px"></ul>
       </div>

@@ -173,6 +173,267 @@ body[data-goal-level="3"]::after{ opacity:1; animation: ambient-fire-pulse 3.4s 
 .tint-danger{ background: color-mix(in srgb, var(--danger) 18%, transparent); color: var(--danger); }
 .tint-warning{ background: color-mix(in srgb, var(--warning) 18%, transparent); color: var(--warning); }
 
+/* ============ تلوين وتحذيرات الاستراحة والنوم وشارات الحالة ============ */
+.stat-status-badge{ font-size:.67rem; font-weight:800; padding:2px 7px; border-radius: var(--radius-pill); display:inline-flex; align-items:center; gap:3px; white-space:nowrap; }
+.stat-badge-yellow{ background: rgba(234, 179, 8, 0.18); color: #facc15; border: 1px solid rgba(234, 179, 8, 0.4); }
+.stat-badge-red{ background: rgba(239, 68, 68, 0.18); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.45); }
+.stat-badge-darkred{ background: rgba(185, 28, 28, 0.3); color: #ff8585; border: 1px solid rgba(220, 38, 38, 0.6); }
+.stat-badge-white{ background: rgba(255, 255, 255, 0.12); color: #f3f4f6; border: 1px solid rgba(255, 255, 255, 0.25); }
+.stat-badge-green{ background: rgba(34, 197, 94, 0.18); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.38); }
+
+/* تحذير الاستراحة: 4 ساعات أصفر، 7 ساعات أحمر */
+.stat-card.break-warning-yellow{ border-color: rgba(234, 179, 8, 0.55); background: color-mix(in srgb, #eab308 9%, var(--bg-elevated)); box-shadow: 0 0 18px -6px rgba(234, 179, 8, 0.35); }
+.stat-card.break-warning-yellow .stat-value{ color: #facc15; }
+.stat-card.break-warning-red{ border-color: rgba(239, 68, 68, 0.65); background: color-mix(in srgb, #ef4444 11%, var(--bg-elevated)); box-shadow: 0 0 24px -5px rgba(239, 68, 68, 0.5); animation: stat-red-pulse 2.2s ease-in-out infinite; }
+.stat-card.break-warning-red .stat-value{ color: #f87171; }
+
+/* تلوين النوم: 7س أبيض عادي، 8س أخضر جيد، 9س أصفر أسوأ، 10س أحمر تحذير، 11س تحذير أقوى */
+.stat-card.sleep-level-7{ border-color: rgba(255, 255, 255, 0.32); background: color-mix(in srgb, #ffffff 6%, var(--bg-elevated)); }
+.stat-card.sleep-level-7 .stat-value{ color: #ffffff; }
+.stat-card.sleep-level-8{ border-color: rgba(34, 197, 94, 0.55); background: color-mix(in srgb, #22c55e 10%, var(--bg-elevated)); box-shadow: 0 0 20px -6px rgba(34, 197, 94, 0.4); }
+.stat-card.sleep-level-8 .stat-value{ color: #4ade80; }
+.stat-card.sleep-level-9{ border-color: rgba(234, 179, 8, 0.55); background: color-mix(in srgb, #eab308 9%, var(--bg-elevated)); box-shadow: 0 0 18px -6px rgba(234, 179, 8, 0.35); }
+.stat-card.sleep-level-9 .stat-value{ color: #facc15; }
+.stat-card.sleep-level-10{ border-color: rgba(239, 68, 68, 0.65); background: color-mix(in srgb, #ef4444 11%, var(--bg-elevated)); box-shadow: 0 0 24px -5px rgba(239, 68, 68, 0.5); }
+.stat-card.sleep-level-10 .stat-value{ color: #f87171; }
+.stat-card.sleep-level-11{ border-color: #dc2626; background: color-mix(in srgb, #b91c1c 16%, var(--bg-elevated)); box-shadow: 0 0 30px -4px rgba(220, 38, 38, 0.7); animation: stat-red-pulse 1.6s ease-in-out infinite; }
+.stat-card.sleep-level-11 .stat-value{ color: #ff6b6b; text-shadow: 0 0 12px rgba(239, 68, 68, 0.6); }
+
+@keyframes stat-red-pulse{
+  0%, 100%{ border-color: rgba(239, 68, 68, 0.55); box-shadow: 0 0 16px -6px rgba(239, 68, 68, 0.4); }
+  50%{ border-color: rgba(239, 68, 68, 0.95); box-shadow: 0 0 28px -3px rgba(239, 68, 68, 0.75); }
+}
+
+/* ============ بطاقة تحذير نسبة الاستراحة إلى الدراسة ============ */
+.ratio-warning-card{
+  margin-bottom: var(--space-5);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  position: relative;
+  overflow: hidden;
+  backdrop-filter: var(--card-blur);
+  -webkit-backdrop-filter: var(--card-blur);
+  transition: all var(--t-fast) var(--ease-out);
+}
+.ratio-warning-card.severity-yellow{
+  background: color-mix(in srgb, #eab308 10%, var(--bg-elevated));
+  border: 1px solid rgba(234, 179, 8, 0.45);
+  box-shadow: 0 10px 30px -12px rgba(234, 179, 8, 0.25);
+}
+.ratio-warning-card.severity-orange{
+  background: color-mix(in srgb, #f97316 12%, var(--bg-elevated));
+  border: 1px solid rgba(249, 115, 22, 0.5);
+  box-shadow: 0 12px 34px -10px rgba(249, 115, 22, 0.3);
+}
+.ratio-warning-card.severity-red{
+  background: color-mix(in srgb, #ef4444 14%, var(--bg-elevated));
+  border: 1px solid rgba(239, 68, 68, 0.6);
+  box-shadow: 0 14px 40px -8px rgba(239, 68, 68, 0.4);
+  animation: stat-red-pulse 2.4s ease-in-out infinite;
+}
+.ratio-warning-head{ display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+.ratio-warning-title{ display:flex; align-items:center; gap:10px; font-size:1.02rem; font-weight:700; color:var(--text); }
+.ratio-warning-badge{ font-family: var(--font-mono); font-size:0.82rem; font-weight:800; padding:4px 10px; border-radius: var(--radius-pill); }
+.ratio-warning-sub{ font-size:0.88rem; line-height:1.5; color: var(--text-muted); }
+.ratio-warning-sub b{ color: var(--text); }
+.ratio-bar-wrapper{ display:flex; flex-direction:column; gap:6px; }
+.ratio-bar-track{ height:14px; border-radius: var(--radius-pill); background: rgba(255, 255, 255, 0.08); overflow:hidden; display:flex; box-shadow: inset 0 1px 3px rgba(0,0,0,0.3); }
+.ratio-bar-seg-study{ background: linear-gradient(90deg, var(--primary), var(--primary-strong)); height:100%; transition: width 0.5s ease; }
+.ratio-bar-seg-break{ height:100%; transition: width 0.5s ease; }
+.ratio-warning-card.severity-yellow .ratio-bar-seg-break{ background: linear-gradient(90deg, #facc15, #eab308); }
+.ratio-warning-card.severity-orange .ratio-bar-seg-break{ background: linear-gradient(90deg, #fb923c, #f97316); }
+.ratio-warning-card.severity-red .ratio-bar-seg-break{ background: linear-gradient(90deg, #f87171, #ef4444); }
+.ratio-bar-labels{ display:flex; justify-content:space-between; align-items:center; font-size:0.78rem; color: var(--text-muted); }
+.ratio-bar-labels span b{ font-family: var(--font-mono); color: var(--text); }
+.ratio-actions-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-top:4px; flex-wrap:wrap; }
+
+/* ============ إشعارات وتنبيهات الانقطاع ============ */
+.notif-badge-dot{ position:absolute; top:7px; inset-inline-end:7px; width:8px; height:8px; border-radius:50%; background: #22c55e; box-shadow: 0 0 6px #22c55e; }
+.notif-badge-dot.alerting{ background: #ef4444; box-shadow: 0 0 10px #ef4444; animation: pulse-dot 1.2s ease-in-out infinite; }
+
+.inactivity-toast{
+  position: fixed;
+  bottom: 24px;
+  inset-inline: 20px;
+  max-width: 520px;
+  margin: 0 auto;
+  z-index: 9999;
+  background: color-mix(in srgb, var(--bg-elevated-3) 95%, transparent);
+  border-radius: var(--radius-lg);
+  padding: 16px 20px;
+  box-shadow: 0 20px 48px -10px rgba(0,0,0,0.65), 0 0 0 1px var(--border-strong);
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  animation: toast-slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.inactivity-toast.level-reminder{ border-inline-start: 5px solid #38bdf8; }
+.inactivity-toast.level-warning{ border-inline-start: 5px solid #facc15; }
+.inactivity-toast.level-high{ border-inline-start: 5px solid #fb923c; }
+.inactivity-toast.level-severe{ border-inline-start: 5px solid #ef4444; animation: toast-slide-up 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards, stat-red-pulse 1.8s ease-in-out infinite; }
+.inactivity-toast-icon{ font-size: 1.6rem; line-height: 1; flex-shrink: 0; margin-top: 2px; }
+.inactivity-toast-content{ flex: 1; display: flex; flex-direction: column; gap: 4px; }
+.inactivity-toast-title{ font-weight: 800; font-size: 0.98rem; color: var(--text); }
+.inactivity-toast-body{ font-size: 0.85rem; color: var(--text-muted); line-height: 1.45; }
+.inactivity-toast-actions{ display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+.inactivity-toast-close{ background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; }
+.inactivity-toast-close:hover{ color: var(--text); background: var(--bg-elevated-2); }
+@keyframes toast-slide-up{ from{ opacity:0; transform: translateY(24px) scale(0.96); } to{ opacity:1; transform: translateY(0) scale(1); } }
+
+/* ============ تنبيه مكالمة الساعتين (Phone Call Alert) ============ */
+.phone-call-modal{
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  z-index: 10050;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.phone-call-modal.show{
+  display: flex;
+  animation: phone-fade-in 0.25s ease-out;
+}
+@keyframes phone-fade-in{
+  from{ opacity: 0; }
+  to{ opacity: 1; }
+}
+.phone-call-card{
+  background: color-mix(in srgb, var(--bg-elevated-3) 98%, transparent);
+  border: 2px solid rgba(239, 68, 68, 0.65);
+  box-shadow: 0 25px 60px -10px rgba(0, 0, 0, 0.85), 0 0 36px rgba(239, 68, 68, 0.4);
+  border-radius: var(--radius-xl);
+  padding: 30px 24px;
+  max-width: 480px;
+  width: 100%;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  animation: phone-card-pop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+@keyframes phone-card-pop{
+  from{ transform: scale(0.85); opacity: 0; }
+  to{ transform: scale(1); opacity: 1; }
+}
+.phone-call-icon-wrap{
+  position: relative;
+  width: 84px;
+  height: 84px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 2px;
+}
+.phone-call-icon{
+  width: 66px;
+  height: 66px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #ef4444, #dc2626);
+  color: #fff;
+  font-size: 2.1rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 10px 25px -4px rgba(239, 68, 68, 0.6);
+  z-index: 2;
+  animation: phone-wiggle 1.2s ease-in-out infinite;
+}
+@keyframes phone-wiggle{
+  0%, 100%{ transform: rotate(0deg) scale(1); }
+  15%{ transform: rotate(-16deg) scale(1.08); }
+  30%{ transform: rotate(16deg) scale(1.08); }
+  45%{ transform: rotate(-12deg) scale(1.05); }
+  60%{ transform: rotate(12deg) scale(1.05); }
+  75%{ transform: rotate(0deg) scale(1); }
+}
+.phone-call-pulse{
+  position: absolute;
+  inset: -6px;
+  border-radius: 50%;
+  border: 2px solid rgba(239, 68, 68, 0.65);
+  animation: phone-wave 1.8s ease-out infinite;
+}
+.phone-call-pulse.pulse-2{
+  animation-delay: 0.6s;
+}
+@keyframes phone-wave{
+  0%{ transform: scale(0.8); opacity: 1; }
+  100%{ transform: scale(1.7); opacity: 0; }
+}
+.phone-call-title{
+  font-size: 1.18rem;
+  font-weight: 900;
+  color: var(--text);
+  line-height: 1.35;
+}
+.phone-call-sub{
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+.phone-call-actions{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  margin-top: 6px;
+}
+.phone-btn-answer{
+  background: linear-gradient(135deg, var(--primary), var(--primary-strong));
+  color: var(--primary-ink, #fff);
+  font-weight: 800;
+  padding: 12px 18px;
+  font-size: 0.98rem;
+  border-radius: var(--radius-md);
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: 0 8px 20px -4px color-mix(in srgb, var(--primary) 50%, transparent);
+  transition: transform var(--t-fast), filter var(--t-fast);
+}
+.phone-btn-answer:hover{
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+.phone-btn-dismiss{
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  padding: 10px 16px;
+  font-size: 0.9rem;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background var(--t-fast), color var(--t-fast);
+}
+.phone-btn-dismiss:hover{
+  background: var(--bg-elevated-2);
+  color: var(--text);
+}
+.ratio-family-note{
+  font-size: 0.82rem;
+  color: var(--text);
+  background: color-mix(in srgb, var(--primary) 12%, var(--bg-elevated));
+  border: 1px dashed color-mix(in srgb, var(--primary) 40%, transparent);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-top: 6px;
+  line-height: 1.45;
+}
+
+
 /* ============ الخط الزمني — العنصر المميز ============ */
 .timeline-card .card-icon{ background: color-mix(in srgb, var(--primary) 18%, transparent); color: var(--primary); }
 .timeline-legend{ display:flex; gap: var(--space-4); font-size:.78rem; color: var(--text-muted); }

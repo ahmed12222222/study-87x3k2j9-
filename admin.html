@@ -79,6 +79,10 @@
         <a href="review.html" class="btn-icon" title="المراجعات والامتحانات" aria-label="المراجعات والامتحانات"><span data-icon="target"></span></a>
         <a href="focus-tracker.html" class="btn-icon ft-badge-btn" id="ftBadgeAdmin" data-ft-badge title="Focus Tracker" aria-label="Focus Tracker"></a>
         <button type="button" class="btn-icon" id="btn-report" onclick="openReportModal()" title="تقرير الإنجاز" aria-label="تقرير الإنجاز"><span data-icon="chart"></span></button>
+        <button type="button" class="btn-icon" id="btn-notifications" onclick="openNotificationModal()" title="إشعارات الانقطاع والتنبيهات" aria-label="إشعارات الانقطاع والتنبيهات" style="position:relative;">
+          <span data-icon="bell"></span>
+          <span class="notif-badge-dot" id="notif-badge-dot" style="display:none;"></span>
+        </button>
         <span class="sync-dot-mini off" id="sync-dot-mini" title="حالة المزامنة"></span>
         <button type="button" class="btn-icon" onclick="openSettings()" title="الإعدادات" aria-label="الإعدادات"><span data-icon="settings"></span></button>
       </div>
@@ -117,32 +121,41 @@
   </section>
 
   <section class="stats-grid reveal" style="animation-delay:.05s">
-    <div class="stat-card">
+    <div class="stat-card" id="card-stat-study">
       <div class="stat-top"><span class="stat-icon tint-primary" data-icon="book"></span></div>
       <span class="stat-value num-inline" id="stat-study">0 د</span>
       <span class="stat-label">قراءة اليوم</span>
     </div>
-    <div class="stat-card">
-      <div class="stat-top"><span class="stat-icon tint-secondary" data-icon="coffee"></span></div>
+    <div class="stat-card" id="card-stat-break">
+      <div class="stat-top">
+        <span class="stat-icon tint-secondary" data-icon="coffee"></span>
+        <span class="stat-status-badge" id="badge-stat-break" style="display:none;"></span>
+      </div>
       <span class="stat-value num-inline" id="stat-break">0 د</span>
       <span class="stat-label">استراحة اليوم</span>
     </div>
-    <div class="stat-card">
-      <div class="stat-top"><span class="stat-icon tint-success" data-icon="bed"></span></div>
+    <div class="stat-card" id="card-stat-sleep">
+      <div class="stat-top">
+        <span class="stat-icon tint-success" data-icon="bed"></span>
+        <span class="stat-status-badge" id="badge-stat-sleep" style="display:none;"></span>
+      </div>
       <span class="stat-value num-inline" id="stat-sleep">0 د</span>
       <span class="stat-label">نوم اليوم</span>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" id="card-stat-percent">
       <div class="stat-top"><span class="stat-icon tint-success" data-icon="chart"></span></div>
       <span class="stat-value num" id="stat-percent">0%</span>
       <span class="stat-label">إنجاز اليوم</span>
     </div>
-    <div class="stat-card">
+    <div class="stat-card" id="card-stat-points">
       <div class="stat-top"><span class="stat-icon tint-warning" data-icon="sparkle"></span></div>
       <span class="stat-value num" id="stat-points">0</span>
       <span class="stat-label">نقاط اليوم</span>
     </div>
   </section>
+
+  <!-- بطاقة تحذير نسبة الاستراحة إلى الدراسة (تظهر إذا الاستراحة >= 50% من الدراسة) -->
+  <section class="ratio-warning-card reveal" id="ratio-warning-card" style="display:none; animation-delay:.08s;"></section>
 
   <section class="card timeline-card reveal" style="animation-delay:.1s">
     <div class="card-head">
@@ -640,6 +653,130 @@
   </div>
 </div>
 
+<!-- لوحة إشعارات الانقطاع والتنبيهات التصاعدية -->
+<div class="modal-overlay" id="modal-notifications" role="dialog" aria-modal="true">
+  <div class="modal modal-lg">
+    <div class="modal-head">
+      <h3 class="modal-title" style="display:flex;align-items:center;gap:8px;">
+        <span data-icon="bell"></span>
+        <span>إشعارات وتنبيهات الانقطاع عن الدراسة</span>
+      </h3>
+      <button type="button" class="icon-btn" onclick="closeModal('modal-notifications')" aria-label="إغلاق"><span data-icon="x"></span></button>
+    </div>
+    <div class="modal-body" style="display:flex;flex-direction:column;gap:18px;">
+      
+      <!-- بطاقة حالة إذن المتصفح -->
+      <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius-md);padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-size:1.6rem;" id="notif-perm-icon">🔔</span>
+          <div>
+            <div style="font-weight:700;font-size:0.95rem;" id="notif-perm-status-title">إشعارات المتصفح</div>
+            <div style="font-size:0.8rem;color:var(--text-muted);" id="notif-perm-status-desc">تصلك تنبيهات حية ومباشرة إذا انقطعت عن المذاكرة.</div>
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <button type="button" class="btn btn-primary btn-sm" id="btn-request-notif-perm" onclick="requestNotificationPermission()">
+            <span data-icon="bell"></span>
+            <span id="btn-request-notif-label">تفعيل إشعارات المتصفح</span>
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="testInactivityNotification()" title="إرسال إشعار تجريبي الآن للتأكد">
+            <span>🔔 تجربة إشعار</span>
+          </button>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="testPhoneCallSound()" title="تجربة رنين مكالمة تنبيه الساعتين">
+            <span>📞 تجربة رنين مكالمة الساعتين</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- إعدادات التنبيه السريع -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+        <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div>
+            <div style="font-weight:700;font-size:0.88rem;">التنبيه الصوتي (Chime)</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);">تشغيل نغمة عند وصول كل إشعار</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="setting-notif-sound" checked onchange="toggleNotifSound(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+        <div style="background:var(--bg-soft);border:1px solid var(--border);border-radius:var(--radius-md);padding:12px 14px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
+          <div>
+            <div style="font-weight:700;font-size:0.88rem;">التنبيهات على الشاشة (Toast)</div>
+            <div style="font-size:0.75rem;color:var(--text-muted);">إظهار رسالة عائمة بالصفحة</div>
+          </div>
+          <label class="toggle-switch">
+            <input type="checkbox" id="setting-notif-inapp" checked onchange="toggleNotifInApp(this.checked)">
+            <span class="toggle-slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <!-- شرح سلم التنبيهات التصاعدية -->
+      <div>
+        <div style="font-weight:800;font-size:0.92rem;margin-bottom:8px;color:var(--text);">📈 سلّم التنبيهات التصاعدية عند الانقطاع أو الاستراحة:</div>
+        <div style="display:flex;flex-direction:column;gap:8px;">
+          <div style="display:flex;align-items:flex-start;gap:10px;background:rgba(56,189,248,0.08);border:1px solid rgba(56,189,248,0.2);padding:10px 12px;border-radius:var(--radius-md);">
+            <span style="font-size:1.2rem;">☕</span>
+            <div style="font-size:0.82rem;line-height:1.45;">
+              <b style="color:#38bdf8;">نصف ساعة (30 دقيقة): تذكير لطيف</b><br>
+              "مرّت نصف ساعة استراحة! استراحة قصيرة تكفي لاستعادة طاقتك، هل نعود لمواصلة الدراسة؟"
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:10px;background:rgba(234,179,8,0.08);border:1px solid rgba(234,179,8,0.25);padding:10px 12px;border-radius:var(--radius-md);">
+            <span style="font-size:1.2rem;">⚠️</span>
+            <div style="font-size:0.82rem;line-height:1.45;">
+              <b style="color:#facc15;">ساعة كاملة (60 دقيقة): تنبيه أشد وغير متهاون</b><br>
+              "مرّت ساعة كاملة بدون دراسة! لا تدع الوقت يفلت، حان وقت استئناف الجلسة الآن!"
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:10px;background:rgba(249,115,22,0.08);border:1px solid rgba(249,115,22,0.25);padding:10px 12px;border-radius:var(--radius-md);">
+            <span style="font-size:1.2rem;">🚨</span>
+            <div style="font-size:0.82rem;line-height:1.45;">
+              <b style="color:#fb923c;">ساعة ونصف (90 دقيقة): تنبيه مشدد وجاد</b><br>
+              "مضت ساعة ونصف من الانقطاع! حافظ على عزمك وادخل جلسة التركيز الآن قبل فوات اليوم!"
+            </div>
+          </div>
+          <div style="display:flex;align-items:flex-start;gap:10px;background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.3);padding:10px 12px;border-radius:var(--radius-md);">
+            <span style="font-size:1.2rem;">📞</span>
+            <div style="font-size:0.82rem;line-height:1.45;">
+              <b style="color:#f87171;">ساعتان (120 دقيقة): رنين مكالمة تنبيهية قوية 📞</b><br>
+              "رنين مكالمة هاتفية حقيقي متكرر بصوت واضح وهادئ الحجم، مع شاشة اتصال طارئة لإنهاء الاستراحة والبدء بالدراسة فوراً!"
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="modal-foot">
+      <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('modal-notifications')">إغلاق</button>
+    </div>
+  </div>
+</div>
+
+<!-- نافذة مكالمة تنبيه الساعتين -->
+<div id="phone-call-alert-modal" class="phone-call-modal" role="dialog" aria-modal="true" style="display:none;">
+  <div class="phone-call-card">
+    <div class="phone-call-icon-wrap">
+      <div class="phone-call-pulse"></div>
+      <div class="phone-call-pulse pulse-2"></div>
+      <div class="phone-call-icon">📞</div>
+    </div>
+    <div class="phone-call-title">📞 مكالمة تنبيه عاجلة: استراحتك وصلت ساعتين!</div>
+    <div class="phone-call-sub" id="phone-call-alert-msg">
+      صارلك ساعتين كاملتين (120 دقيقة) بالاستراحة! الهدف ينتظرك واليوم ينقضي، حان وقت إنهاء الاستراحة والبدء بالدراسة فوراً.
+    </div>
+    <div class="phone-call-actions">
+      <button type="button" class="phone-btn-answer" onclick="respondTo2HourCall()">
+        <span>📚 الرد والبدء بالدراسة الآن</span>
+      </button>
+      <button type="button" class="phone-btn-dismiss" onclick="stopPhoneCallRingtone()">
+        <span>🔕 إيقاف رنين المنبه</span>
+      </button>
+    </div>
+  </div>
+</div>
+
 <!-- لوحة الإعدادات -->
 <div class="modal-overlay" id="modal-settings" role="dialog" aria-modal="true">
   <div class="modal modal-lg">
@@ -744,6 +881,16 @@
             <div class="form-hint" style="margin-top:0;">إخفاء قائمة أهداف وإنجازات اليوم عن الزوار في صفحة المتابعين افتراضياً.</div>
           </div>
           <input type="checkbox" id="setting-hide-viewer-achieve" style="width:20px;height:20px;accent-color:var(--primary);cursor:pointer;flex-shrink:0;">
+        </div>
+        <div class="form-group" style="padding:10px 14px;background:var(--bg-elevated, rgba(255,255,255,0.03));border:1px solid var(--border);border-radius:10px;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div>
+            <div style="font-weight:700;font-size:0.9rem;">إشعارات الانقطاع والاستراحة</div>
+            <div class="form-hint" style="margin-top:0;">تنبيهات تصاعدية (30د، 60د، 90د، ساعتان) لحمايتك من التسويف.</div>
+          </div>
+          <button type="button" class="btn btn-secondary btn-sm" onclick="closeModal('modal-settings'); openNotificationModal();">
+            <span data-icon="bell"></span>
+            <span>ضبط وتجربة</span>
+          </button>
         </div>
         <button type="button" class="btn btn-primary" onclick="saveGoalsSettings()"><span data-icon="check"></span><span>حفظ</span></button>
       </div>
