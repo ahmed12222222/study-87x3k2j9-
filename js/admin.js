@@ -483,13 +483,14 @@ function renderTimeline(){
     if(el) el.innerHTML = renderMonthGridHTML(getScopedView());
   } else {
     const el = document.getElementById('timeline-track');
-    const activeTimer = (currentDayKey === todayKey()) ? DATA.activeTimer : null;
-    if(el) el.innerHTML = renderTimelineHTML(ensureDay(DATA, currentDayKey), activeTimer);
+    if(el) el.innerHTML = renderTimelineHTML(ensureDay(DATA, currentDayKey), DATA.activeTimer, currentDayKey, DATA);
   }
 }
 
 /* -------------------- المؤقّت (طريقة الزر) -------------------- */
 let tickCount = 0;
+let trackedMidnightDayKey = todayKey();
+
 function startTickInterval(){
   if(tickInterval) return;
   tickInterval = setInterval(updateRunningTimerDisplay, 1000);
@@ -502,6 +503,19 @@ let activeBreak2HourAlertFired = false;
 
 function updateRunningTimerDisplay(){
   if(!DATA.activeTimer) return;
+
+  // فحص انتقال منتصف الليل أثناء تشغيل المتصفح حتى لا ينقطع العداد
+  const realToday = todayKey();
+  if(trackedMidnightDayKey !== realToday){
+    const wasOnToday = (currentDayKey === trackedMidnightDayKey);
+    trackedMidnightDayKey = realToday;
+    if(wasOnToday){
+      currentDayKey = realToday;
+      renderDayNav();
+    }
+    renderAll();
+  }
+
   const elapsed = getActiveElapsedSeconds(DATA.activeTimer);
   const el = document.getElementById(`timerdisplay-${DATA.activeTimer.category}`);
   if(el) el.textContent = formatStopwatch(elapsed);
@@ -535,20 +549,35 @@ function stopTimer(catKey){
   if(!DATA.activeTimer || DATA.activeTimer.category !== catKey) return;
   activeBreak2HourAlertFired = false;
   const cat = CATS[catKey];
-  const day = ensureDay(DATA);
-  const prevMinutes = day[cat.arrayKey].reduce((s,x)=>s+x.minutes, 0);
   const start = DATA.activeTimer.start;
   const end = new Date().toISOString();
+  const startDay = todayKey(new Date(start));
+  const endDay = todayKey(new Date(end));
   const minutes = Math.max(1, Math.round((new Date(end) - new Date(start)) / 60000));
+
+  // إذا امتد العداد عبر منتصف الليل (مثل النوم من ليلة البارحة للصباح):
+  // يُحفظ في يوم البدء (اليوم الذي بدأ فيه النوم) كما في الإضافة اليدوية تماماً
+  const targetDayKey = startDay;
+  const day = ensureDay(DATA, targetDayKey);
+  const prevMinutes = day[cat.arrayKey].reduce((s,x)=>s+x.minutes, 0);
   const session = { id: uid(), start, end, minutes, details: '', source: 'timer' };
   day[cat.arrayKey].push(session);
   DATA.activeTimer = null;
   persistImmediate();
   stopTickInterval();
   renderAll();
-  toast(cat.addedToast, 'success');
-  if(catKey === 'study') checkGoalCelebration(prevMinutes, prevMinutes + minutes);
-  openDetailsModal(catKey, session.id);
+
+  if(startDay !== endDay){
+    const msg = catKey === 'sleep'
+      ? `صح النوم! تم حفظ نومك (${formatDuration(minutes)}) في سجل ليلة ${formatDayLabel(startDay)} 🌙`
+      : `${cat.addedToast} (${formatDuration(minutes)} — امتدت عبر منتصف الليل)`;
+    toast(msg, 'success');
+  } else {
+    toast(cat.addedToast, 'success');
+  }
+
+  if(catKey === 'study' && targetDayKey === todayKey()) checkGoalCelebration(prevMinutes, prevMinutes + minutes);
+  openDetailsModal(catKey, session.id, targetDayKey);
 }
 
 function cancelTimer(catKey){
@@ -568,13 +597,15 @@ function closeoutActiveSegment(){
   if(!DATA.activeTimer) return;
   const catKey = DATA.activeTimer.category;
   const cat = CATS[catKey];
-  const day = ensureDay(DATA);
-  const prevMinutes = day[cat.arrayKey].reduce((s,x)=>s+x.minutes, 0);
   const start = DATA.activeTimer.start;
   const end = new Date().toISOString();
+  const startDay = todayKey(new Date(start));
+  const targetDayKey = startDay;
+  const day = ensureDay(DATA, targetDayKey);
+  const prevMinutes = day[cat.arrayKey].reduce((s,x)=>s+x.minutes, 0);
   const minutes = Math.max(1, Math.round((new Date(end) - new Date(start)) / 60000));
   day[cat.arrayKey].push({ id: uid(), start, end, minutes, details: '', source: 'joker' });
-  if(catKey === 'study') checkGoalCelebration(prevMinutes, prevMinutes + minutes);
+  if(catKey === 'study' && targetDayKey === todayKey()) checkGoalCelebration(prevMinutes, prevMinutes + minutes);
 }
 
 function jokerStart(){
@@ -613,6 +644,36 @@ function renderJoker(){
   const captionEl = document.getElementById('joker-caption');
   const actionsEl = document.getElementById('joker-actions');
   const isToday = currentDayKey === todayKey();
+  const at = DATA.activeTimer;
+
+  // إذا كان هناك عداد نشط، نعرض حالته فوراً حتى لو كنا بمنتصف الليل أو تاريخ سابق
+  if(at){
+    if(at.category === 'sleep'){
+      card.dataset.state = 'sleeping';
+      if(displayEl) displayEl.textContent = formatStopwatch(getActiveElapsedSeconds(at));
+      if(captionEl) captionEl.textContent = 'نايم الحين 😴 — تقدر تضغط «صحيت» هنا أو من كرت نومي بالأسفل';
+      if(actionsEl) actionsEl.innerHTML = `<button type="button" class="btn btn-danger joker-btn" onclick="stopTimer('sleep')">${ICONS.stop}<span>صحيت من النوم ☀️</span></button>`;
+      return;
+    } else if(at.category === 'study'){
+      card.dataset.state = 'studying';
+      if(displayEl) displayEl.textContent = formatStopwatch(getActiveElapsedSeconds(at));
+      if(captionEl) captionEl.textContent = 'تدرس الحين 📖';
+      if(actionsEl) actionsEl.innerHTML = `
+        <button type="button" class="btn btn-secondary joker-btn" onclick="jokerToggle()">${ICONS.coffee}<span>خذ استراحة</span></button>
+        <button type="button" class="btn btn-danger joker-btn" onclick="jokerEndToSleep()">${ICONS.bed}<span>إنهاء ونام</span></button>
+      `;
+      return;
+    } else {
+      card.dataset.state = 'resting';
+      if(displayEl) displayEl.textContent = formatStopwatch(getActiveElapsedSeconds(at));
+      if(captionEl) captionEl.textContent = 'تستريح الحين ☕';
+      if(actionsEl) actionsEl.innerHTML = `
+        <button type="button" class="btn btn-primary joker-btn" onclick="jokerToggle()">${ICONS.book}<span>ارجع للدراسة</span></button>
+        <button type="button" class="btn btn-danger joker-btn" onclick="jokerEndToSleep()">${ICONS.bed}<span>إنهاء ونام</span></button>
+      `;
+      return;
+    }
+  }
 
   if(!isToday){
     card.dataset.state = 'idle';
@@ -622,33 +683,10 @@ function renderJoker(){
     return;
   }
 
-  const at = DATA.activeTimer;
-  if(!at){
-    card.dataset.state = 'idle';
-    if(displayEl) displayEl.textContent = '00:00:00';
-    if(captionEl) captionEl.textContent = 'زر وحد لدراسة واستراحة متبادلة — تبدّلون بلمسة، وتنتهون بتسجيل نوم';
-    if(actionsEl) actionsEl.innerHTML = `<button type="button" class="btn btn-primary joker-btn" onclick="jokerStart()">${ICONS.play}<span>ابدأ</span></button>`;
-  } else if(at.category === 'sleep'){
-    card.dataset.state = 'sleeping';
-    if(captionEl) captionEl.textContent = 'نايم الحين 😴 — اضغط «صحيت» بكرت نومي تحت لما تصحى';
-    if(actionsEl) actionsEl.innerHTML = '';
-  } else if(at.category === 'study'){
-    card.dataset.state = 'studying';
-    if(displayEl) displayEl.textContent = formatStopwatch(getActiveElapsedSeconds(at));
-    if(captionEl) captionEl.textContent = 'تدرس الحين 📖';
-    if(actionsEl) actionsEl.innerHTML = `
-      <button type="button" class="btn btn-secondary joker-btn" onclick="jokerToggle()">${ICONS.coffee}<span>خذ استراحة</span></button>
-      <button type="button" class="btn btn-danger joker-btn" onclick="jokerEndToSleep()">${ICONS.bed}<span>إنهاء ونام</span></button>
-    `;
-  } else {
-    card.dataset.state = 'resting';
-    if(displayEl) displayEl.textContent = formatStopwatch(getActiveElapsedSeconds(at));
-    if(captionEl) captionEl.textContent = 'تستريح الحين ☕';
-    if(actionsEl) actionsEl.innerHTML = `
-      <button type="button" class="btn btn-primary joker-btn" onclick="jokerToggle()">${ICONS.book}<span>ارجع للدراسة</span></button>
-      <button type="button" class="btn btn-danger joker-btn" onclick="jokerEndToSleep()">${ICONS.bed}<span>إنهاء ونام</span></button>
-    `;
-  }
+  card.dataset.state = 'idle';
+  if(displayEl) displayEl.textContent = '00:00:00';
+  if(captionEl) captionEl.textContent = 'زر وحد لدراسة واستراحة متبادلة — تبدّلون بلمسة، وتنتهون بتسجيل نوم';
+  if(actionsEl) actionsEl.innerHTML = `<button type="button" class="btn btn-primary joker-btn" onclick="jokerStart()">${ICONS.play}<span>ابدأ</span></button>`;
 }
 
 function checkGoalCelebration(prevMinutes, newMinutes){
@@ -998,6 +1036,16 @@ function renderTrackerSection(catKey){
   } else if(catKey === 'sleep'){
     const slpSt = getSleepRatingStatus(totalMin);
     if(slpSt.active && slpSt.text) totalHtml += ` <span class="stat-status-badge ${slpSt.badgeClass}">${slpSt.text}</span>`;
+    if(isDay && totalMin === 0 && DATA.days){
+      const prevDate = new Date(currentDayKey + 'T12:00:00');
+      prevDate.setDate(prevDate.getDate() - 1);
+      const prevKey = todayKey(prevDate);
+      const prevDay = DATA.days[prevKey];
+      const overnight = (prevDay && prevDay.sleep || []).find(s => s && s.end && new Date(s.end).getTime() > new Date(currentDayKey + 'T00:00:00').getTime());
+      if(overnight){
+        totalHtml += ` <div style="font-size:0.75rem;margin-top:4px;color:var(--text-muted);font-weight:normal;">🌙 نوم ليلة البارحة: <b>${formatDuration(overnight.minutes)}</b> (مسجل في <a href="javascript:void(0)" onclick="currentDayKey='${prevKey}';renderDayNav();renderAll();" style="color:var(--primary);text-decoration:underline;">ليلة ${formatDayLabel(prevKey)}</a>)</div>`;
+      }
+    }
   }
   if(totalEl) totalEl.innerHTML = totalHtml;
 
@@ -1012,17 +1060,26 @@ function renderTrackerSection(catKey){
     if(timerBox) timerBox.classList.toggle('running', !!isRunning);
     if(timerDisplay) timerDisplay.classList.toggle('running', !!isRunning);
 
-    if(!isToday){
-      if(timerDisplay) timerDisplay.textContent = '—:—:—';
-      if(timerCaption) timerCaption.textContent = 'العداد الحي يشتغل بس لليوم — استخدم «إضافة يدوية» تحت لتسجيل وقت بهذا اليوم';
-      if(controlsEl) controlsEl.innerHTML = `<button class="btn btn-secondary timer-btn" disabled>${ICONS.clock}<span>متوفر لليوم بس</span></button>`;
-    } else if(isRunning){
+    if(isRunning){
+      const startT = DATA.activeTimer.start;
+      const startDay = todayKey(new Date(startT));
+      const isCrossDay = (startDay !== todayKey());
       if(timerDisplay) timerDisplay.textContent = formatStopwatch(getActiveElapsedSeconds(DATA.activeTimer));
-      if(timerCaption) timerCaption.textContent = `بدأت الساعة ${formatTime(DATA.activeTimer.start)} — حسب ساعة جهازك`;
+      if(timerCaption){
+        if(isCrossDay){
+          timerCaption.textContent = `بدأ ${formatDayLabel(startDay)} الساعة ${formatTime(startT)} — مستمر لليوم (تقدر توقفه بأي وقت)`;
+        } else {
+          timerCaption.textContent = `بدأت الساعة ${formatTime(startT)} — حسب ساعة جهازك`;
+        }
+      }
       if(controlsEl) controlsEl.innerHTML = `
         <button class="btn btn-danger timer-btn" onclick="stopTimer('${catKey}')">${ICONS.stop}<span>${cat.endLabel}</span></button>
         <button class="btn btn-ghost btn-sm" onclick="cancelTimer('${catKey}')">إلغاء بدون حفظ</button>
       `;
+    } else if(!isToday){
+      if(timerDisplay) timerDisplay.textContent = '—:—:—';
+      if(timerCaption) timerCaption.textContent = 'العداد الحي يشتغل بس لليوم — استخدم «إضافة يدوية» تحت لتسجيل وقت بهذا اليوم';
+      if(controlsEl) controlsEl.innerHTML = `<button class="btn btn-secondary timer-btn" disabled>${ICONS.clock}<span>متوفر لليوم بس</span></button>`;
     } else {
       if(timerDisplay) timerDisplay.textContent = '00:00:00';
       if(timerCaption) timerCaption.textContent = DATA.activeTimer ? 'يوجد عداد آخر شغال حالياً' : 'اضغط ابدأ وراح يحسب الوقت أوتوماتيكياً';
@@ -1083,9 +1140,43 @@ function openDetailsModal(catKey, sessionId, dayKey){
   document.getElementById('modal-details-end').value = toTimeInputValue(session.end);
   document.getElementById('modal-details-notes').value = session.details || '';
   document.getElementById('modal-details-duration').textContent = formatDuration(session.minutes);
+
+  const dayInfoEl = document.getElementById('modal-details-day-info');
+  if(dayInfoEl){
+    const sStartDay = todayKey(new Date(session.start));
+    const sEndDay = session.end ? todayKey(new Date(session.end)) : sStartDay;
+    const isMultiDay = sStartDay !== sEndDay;
+    const altDayKey = (dayKey === sStartDay && isMultiDay) ? sEndDay : (dayKey === sEndDay && isMultiDay) ? sStartDay : null;
+    let html = `<span>📅 مسجلة في: <b>${formatDayLabel(dayKey)}</b>${isMultiDay ? ' (تمتد لليوم التالي 🌙)' : ''}</span>`;
+    if(altDayKey){
+      html += `<button type="button" class="btn btn-secondary btn-sm" onclick="moveCurrentSessionToDay('${altDayKey}')" style="font-size:0.78rem;padding:4px 8px;">نقل إلى ${formatDayLabel(altDayKey)}</button>`;
+    }
+    dayInfoEl.innerHTML = html;
+    dayInfoEl.style.display = 'flex';
+  }
+
   showModal('modal-details');
   setTimeout(() => document.getElementById('modal-details-notes').focus(), 250);
 }
+
+function moveCurrentSessionToDay(targetKey){
+  if(!currentModalSession) return;
+  const { catKey, sessionId, dayKey } = currentModalSession;
+  if(dayKey === targetKey) return;
+  const cat = CATS[catKey];
+  const oldDay = ensureDay(DATA, dayKey);
+  const sIndex = oldDay[cat.arrayKey].findIndex(s => s.id === sessionId);
+  if(sIndex === -1) return;
+  const [session] = oldDay[cat.arrayKey].splice(sIndex, 1);
+  const newDay = ensureDay(DATA, targetKey);
+  newDay[cat.arrayKey].push(session);
+  currentModalSession.dayKey = targetKey;
+  persist();
+  renderAll();
+  openDetailsModal(catKey, sessionId, targetKey);
+  toast(`تم نقل الجلسة إلى سجل ${formatDayLabel(targetKey)} ✓`, 'success');
+}
+window.moveCurrentSessionToDay = moveCurrentSessionToDay;
 
 function saveDetailsModal(){
   if(!currentModalSession) return;

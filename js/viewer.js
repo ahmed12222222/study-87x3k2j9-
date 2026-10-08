@@ -219,7 +219,7 @@ function renderViewerTimeline(){
     if(el) el.innerHTML = renderMonthGridHTML(getViewerScopedView());
   } else {
     const el = document.getElementById('timeline-track');
-    if(el) el.innerHTML = renderTimelineHTML(currentDay(), VDATA && VDATA.activeTimer);
+    if(el) el.innerHTML = renderTimelineHTML(currentDay(), VDATA && VDATA.activeTimer, todayKey(), VDATA);
   }
 }
 
@@ -238,6 +238,16 @@ function renderViewerSessions(catKey){
   } else if(catKey === 'sleep'){
     const slpSt = getSleepRatingStatus(totalMin, true, studentName);
     if(slpSt.active && slpSt.text) totalHtml += ` <span class="stat-status-badge ${slpSt.badgeClass}">${slpSt.text}</span>`;
+    if(isDay && totalMin === 0 && VDATA && VDATA.days){
+      const prevDate = new Date(todayKey() + 'T12:00:00');
+      prevDate.setDate(prevDate.getDate() - 1);
+      const prevKey = todayKey(prevDate);
+      const prevDay = VDATA.days[prevKey];
+      const overnight = (prevDay && prevDay.sleep || []).find(s => s && s.end && new Date(s.end).getTime() > new Date(todayKey() + 'T00:00:00').getTime());
+      if(overnight){
+        totalHtml += ` <div style="font-size:0.75rem;margin-top:4px;color:var(--text-muted);font-weight:normal;">🌙 نوم ليلة البارحة: <b>${formatDuration(overnight.minutes)}</b> (مسجل في ليلة ${formatDayLabel(prevKey)})</div>`;
+      }
+    }
   }
   if(totalEl) totalEl.innerHTML = totalHtml;
   const listEl = document.getElementById(`sessionlist-${catKey}`);

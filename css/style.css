@@ -451,6 +451,8 @@ body[data-goal-level="3"]::after{ opacity:1; animation: ambient-fire-pulse 3.4s 
 .timeline-segment.study{ background: linear-gradient(135deg, var(--primary), var(--primary-strong)); box-shadow: var(--glow-primary); }
 .timeline-segment.brk{ background: linear-gradient(135deg, var(--secondary), color-mix(in srgb, var(--secondary) 80%, white 18%)); }
 .timeline-segment.sleep{ background: linear-gradient(135deg, var(--success), color-mix(in srgb, var(--success) 80%, white 18%)); }
+.timeline-segment.continuation-prev{ border-inline-start-radius: 0; border-inline-start: 2px dashed rgba(255,255,255,0.45); }
+.timeline-segment.continuation-next{ border-inline-end-radius: 0; border-inline-end: 2px dashed rgba(255,255,255,0.45); }
 .timeline-segment:hover, .timeline-segment:focus-visible{ transform: scaleY(1.15); filter: brightness(1.1); z-index:5; }
 .timeline-segment.live{ animation: timeline-live-pulse 1.6s ease-in-out infinite; background-image: repeating-linear-gradient(-45deg, rgba(255,255,255,.22) 0 6px, transparent 6px 12px); background-size: 200% 100%; z-index:4; }
 @keyframes timeline-live-pulse{ 0%,100%{ filter:brightness(1); } 50%{ filter:brightness(1.18); } }

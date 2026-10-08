@@ -864,10 +864,10 @@ function animateCountUp(el, toValue, opts){
 }
 
 /* -------------------- الخط الزمني (العنصر المميز) -------------------- */
-function renderTimelineHTML(dayObj, activeTimer){
-  const study = (dayObj && dayObj.study) || [];
-  const breaks = (dayObj && dayObj.breaks) || [];
-  const sleep = (dayObj && dayObj.sleep) || [];
+function renderTimelineHTML(dayObj, activeTimer, targetDayKey, allData){
+  const targetKey = targetDayKey || (dayObj && dayObj.dayKey) || todayKey();
+  const dayStart = new Date(targetKey + 'T00:00:00').getTime();
+  const dayEnd = dayStart + 24 * 60 * 60 * 1000; // 24 ساعة بالمللي ثانية
   const totalSpan = (TIMELINE_END_HOUR - TIMELINE_START_HOUR) * 60;
 
   function pct(dateLike){
@@ -881,34 +881,99 @@ function renderTimelineHTML(dayObj, activeTimer){
     hourMarks.push(`<div class="timeline-hour"><span>${h === 24 ? '00' : pad2(h)}</span></div>`);
   }
 
+  // تجميع الجلسات مع جلب أي جلسة ممتدة من اليوم السابق (مثل النوم من ليلة البارحة للصباح)
+  const study = [...((dayObj && dayObj.study) || [])];
+  const breaks = [...((dayObj && dayObj.breaks) || [])];
+  const sleep = [...((dayObj && dayObj.sleep) || [])];
+
+  if(allData && allData.days){
+    const prevDate = new Date(dayStart - 12 * 3600 * 1000);
+    const prevKey = todayKey(prevDate);
+    const prevDay = allData.days[prevKey];
+    if(prevDay){
+      const checkAndAddOverflow = (srcArr, targetArr) => {
+        (srcArr || []).forEach(s => {
+          if(s && s.end && new Date(s.end).getTime() > dayStart){
+            // نتأكد ألا نكرر الجلسة إذا كانت مسجلة بالفعل
+            if(!targetArr.some(x => x.id === s.id)){
+              targetArr.push(s);
+            }
+          }
+        });
+      };
+      checkAndAddOverflow(prevDay.study, study);
+      checkAndAddOverflow(prevDay.breaks, breaks);
+      checkAndAddOverflow(prevDay.sleep, sleep);
+    }
+  }
+
+  function getSpan(s){
+    if(!s || !s.start) return null;
+    const sStart = new Date(s.start).getTime();
+    let sEnd = s.end ? new Date(s.end).getTime() : (sStart + (s.minutes || 0) * 60000);
+    if(isNaN(sStart) || isNaN(sEnd) || sEnd <= sStart) return null;
+
+    // فحص التداخل مع هذا اليوم المحدد (من 00:00 إلى 24:00)
+    const overlapStart = Math.max(sStart, dayStart);
+    const overlapEnd = Math.min(sEnd, dayEnd);
+    if(overlapEnd <= overlapStart) return null;
+
+    const startMin = (overlapStart - dayStart) / 60000;
+    const endMin = (overlapEnd - dayStart) / 60000;
+    const left = Math.min(100, Math.max(0, (startMin / 1440) * 100));
+    const right = Math.min(100, Math.max(0, (endMin / 1440) * 100));
+    const width = Math.max(right - left, 0.6);
+
+    let label = `من ${formatTime(s.start)} إلى ${formatTime(s.end)} · ${formatDuration(s.minutes)}`;
+    let extraClass = '';
+    if(sStart < dayStart){
+      label = `امتداد من ليلة البارحة: من منتصف الليل حتى ${formatTime(s.end)} (إجمالي: ${formatDuration(s.minutes)})`;
+      extraClass = ' continuation-prev';
+    } else if(sEnd > dayEnd){
+      label = `من ${formatTime(s.start)} ويمتد لبعد منتصف الليل (حتى ${formatTime(s.end)}) · إجمالي: ${formatDuration(s.minutes)}`;
+      extraClass = ' continuation-next';
+    }
+    return { left, width, label, extraClass };
+  }
+
   function segHtml(sessions, catClass){
     return sessions.map(s => {
-      const left = pct(s.start);
-      const right = pct(s.end);
-      const width = Math.max(right-left, 0.6);
-      const label = `من ${formatTime(s.start)} إلى ${formatTime(s.end)} · ${formatDuration(s.minutes)}`;
-      return `<div class="timeline-segment ${catClass}" style="inset-inline-start:${left}%; width:${width}%;" tabindex="0">
-        <div class="timeline-tooltip">${escapeHtml(label)}</div>
+      const span = getSpan(s);
+      if(!span) return '';
+      return `<div class="timeline-segment ${catClass}${span.extraClass}" style="inset-inline-start:${span.left}%; width:${span.width}%;" tabindex="0">
+        <div class="timeline-tooltip">${escapeHtml(span.label)}</div>
       </div>`;
     }).join('');
   }
 
-  // قطعة "حيّة" للعداد الشغال حالياً — تظهر فوراً لما تضغط ابدأ، وتكبر كل ما مر الوقت
+  // قطعة "حيّة" للعداد الشغال حالياً — تحسب التداخل بدقة حتى لو بدأ قبل منتصف الليل واستمر لليوم التالي
   let liveSegHtml = '';
   if(activeTimer && activeTimer.start){
-    const catClass = { study: 'study', break: 'brk', sleep: 'sleep' }[activeTimer.category] || activeTimer.category;
-    const left = pct(activeTimer.start);
-    const right = pct(new Date());
-    const width = Math.max(right-left, 0.6);
-    const label = `شغال من ${formatTime(activeTimer.start)} — لهسه`;
-    liveSegHtml = `<div class="timeline-segment ${catClass} live" style="inset-inline-start:${left}%; width:${width}%;" tabindex="0">
-      <div class="timeline-tooltip">${escapeHtml(label)}</div>
-    </div>`;
+    const tStart = new Date(activeTimer.start).getTime();
+    const tEnd = Date.now();
+    const overlapStart = Math.max(tStart, dayStart);
+    const overlapEnd = Math.min(tEnd, dayEnd);
+    if(overlapEnd > overlapStart){
+      const catClass = { study: 'study', break: 'brk', sleep: 'sleep' }[activeTimer.category] || activeTimer.category;
+      const startMin = (overlapStart - dayStart) / 60000;
+      const endMin = (overlapEnd - dayStart) / 60000;
+      const left = Math.min(100, Math.max(0, (startMin / 1440) * 100));
+      const right = Math.min(100, Math.max(0, (endMin / 1440) * 100));
+      const width = Math.max(right - left, 0.6);
+      let label = `شغال من ${formatTime(activeTimer.start)} — لهسه`;
+      if(tStart < dayStart){
+        label = `شغال من منتصف الليل حتى الآن (بدأ ${formatTime(activeTimer.start)} البارحة)`;
+      }
+      liveSegHtml = `<div class="timeline-segment ${catClass} live" style="inset-inline-start:${left}%; width:${width}%;" tabindex="0">
+        <div class="timeline-tooltip">${escapeHtml(label)}</div>
+      </div>`;
+    }
   }
 
+  const isToday = targetKey === todayKey();
   const now = new Date();
   const nowPct = pct(now);
-  const isEmpty = study.length === 0 && breaks.length === 0 && sleep.length === 0 && !activeTimer;
+  const isEmpty = study.length === 0 && breaks.length === 0 && sleep.length === 0 && !liveSegHtml;
 
   return `
     <div class="timeline-hours">${hourMarks.join('')}</div>
@@ -916,7 +981,7 @@ function renderTimelineHTML(dayObj, activeTimer){
     ${segHtml(breaks, 'brk')}
     ${segHtml(sleep, 'sleep')}
     ${liveSegHtml}
-    <div class="timeline-now" style="inset-inline-start:${nowPct}%"><div class="timeline-now-dot"></div></div>
+    ${isToday ? `<div class="timeline-now" style="inset-inline-start:${nowPct}%"><div class="timeline-now-dot"></div></div>` : ''}
     ${isEmpty ? `<div class="timeline-empty">لسه ما اكو نشاط مسجل اليوم</div>` : ''}
   `;
 }
