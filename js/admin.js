@@ -553,30 +553,59 @@ function stopTimer(catKey){
   const end = new Date().toISOString();
   const startDay = todayKey(new Date(start));
   const endDay = todayKey(new Date(end));
-  const minutes = Math.max(1, Math.round((new Date(end) - new Date(start)) / 60000));
+  const totalMinutes = Math.max(1, Math.round((new Date(end) - new Date(start)) / 60000));
 
-  // إذا امتد العداد عبر منتصف الليل (مثل النوم من ليلة البارحة للصباح):
-  // يُحفظ في يوم البدء (اليوم الذي بدأ فيه النوم) كما في الإضافة اليدوية تماماً
+  // إذا امتدت الجلسة عبر منتصف الليل (مثلاً نوم من ليلة البارحة للصباح أو استراحة عبر الساعة 12):
+  // نقسّمها بدقة: ما قبل الساعة 12 يُحسب للبارحة، وما بعد الساعة 12 يُحسب لليوم، بدون أي جليتش
+  if(startDay !== endDay){
+    const parts = splitCrossMidnightSession({ start, end, details: '', source: 'timer' });
+    let createdIds = [];
+    parts.forEach(p => {
+      const pDay = ensureDay(DATA, p.dayKey);
+      const prevM = pDay[cat.arrayKey].reduce((s,x)=>s+x.minutes, 0);
+      const sId = uid();
+      createdIds.push({ id: sId, dayKey: p.dayKey });
+      pDay[cat.arrayKey].push({
+        ...p.session,
+        id: sId,
+        source: 'timer'
+      });
+      if(catKey === 'study' && p.dayKey === todayKey()){
+        checkGoalCelebration(prevM, prevM + p.session.minutes);
+      }
+    });
+
+    DATA.activeTimer = null;
+    persistImmediate();
+    stopTickInterval();
+    renderAll();
+
+    const p1 = parts[0];
+    const p2 = parts[1];
+    const msg = catKey === 'sleep'
+      ? `صح النوم! تم تقسيم نومك (${formatDuration(totalMinutes)}): ${formatDuration(p1.session.minutes)} في ليلة ${formatDayLabel(startDay)}، و${formatDuration(p2.session.minutes)} في سجل اليوم ${formatDayLabel(endDay)} 🌙✨`
+      : `تم إنهاء ${cat.label} (${formatDuration(totalMinutes)}) وتقسيمها: ${formatDuration(p1.session.minutes)} لليوم السابق و${formatDuration(p2.session.minutes)} لليوم الحالي ✓`;
+    toast(msg, 'success');
+
+    // فتح نافذة تفاصيل الجزء الأحدث (اليوم) مع إمكانية تعديلها
+    const lastPart = createdIds[createdIds.length - 1];
+    if(lastPart) openDetailsModal(catKey, lastPart.id, lastPart.dayKey);
+    return;
+  }
+
+  // الجلسة ضمن نفس اليوم
   const targetDayKey = startDay;
   const day = ensureDay(DATA, targetDayKey);
   const prevMinutes = day[cat.arrayKey].reduce((s,x)=>s+x.minutes, 0);
-  const session = { id: uid(), start, end, minutes, details: '', source: 'timer' };
+  const session = { id: uid(), start, end, minutes: totalMinutes, details: '', source: 'timer' };
   day[cat.arrayKey].push(session);
   DATA.activeTimer = null;
   persistImmediate();
   stopTickInterval();
   renderAll();
 
-  if(startDay !== endDay){
-    const msg = catKey === 'sleep'
-      ? `صح النوم! تم حفظ نومك (${formatDuration(minutes)}) في سجل ليلة ${formatDayLabel(startDay)} 🌙`
-      : `${cat.addedToast} (${formatDuration(minutes)} — امتدت عبر منتصف الليل)`;
-    toast(msg, 'success');
-  } else {
-    toast(cat.addedToast, 'success');
-  }
-
-  if(catKey === 'study' && targetDayKey === todayKey()) checkGoalCelebration(prevMinutes, prevMinutes + minutes);
+  toast(cat.addedToast, 'success');
+  if(catKey === 'study' && targetDayKey === todayKey()) checkGoalCelebration(prevMinutes, prevMinutes + totalMinutes);
   openDetailsModal(catKey, session.id, targetDayKey);
 }
 
@@ -600,12 +629,31 @@ function closeoutActiveSegment(){
   const start = DATA.activeTimer.start;
   const end = new Date().toISOString();
   const startDay = todayKey(new Date(start));
+  const endDay = todayKey(new Date(end));
+  const totalMinutes = Math.max(1, Math.round((new Date(end) - new Date(start)) / 60000));
+
+  if(startDay !== endDay){
+    const parts = splitCrossMidnightSession({ start, end, details: '', source: 'joker' });
+    parts.forEach(p => {
+      const pDay = ensureDay(DATA, p.dayKey);
+      const prevM = pDay[cat.arrayKey].reduce((s,x)=>s+x.minutes, 0);
+      pDay[cat.arrayKey].push({
+        ...p.session,
+        id: uid(),
+        source: 'joker'
+      });
+      if(catKey === 'study' && p.dayKey === todayKey()){
+        checkGoalCelebration(prevM, prevM + p.session.minutes);
+      }
+    });
+    return;
+  }
+
   const targetDayKey = startDay;
   const day = ensureDay(DATA, targetDayKey);
   const prevMinutes = day[cat.arrayKey].reduce((s,x)=>s+x.minutes, 0);
-  const minutes = Math.max(1, Math.round((new Date(end) - new Date(start)) / 60000));
-  day[cat.arrayKey].push({ id: uid(), start, end, minutes, details: '', source: 'joker' });
-  if(catKey === 'study' && targetDayKey === todayKey()) checkGoalCelebration(prevMinutes, prevMinutes + minutes);
+  day[cat.arrayKey].push({ id: uid(), start, end, minutes: totalMinutes, details: '', source: 'joker' });
+  if(catKey === 'study' && targetDayKey === todayKey()) checkGoalCelebration(prevMinutes, prevMinutes + totalMinutes);
 }
 
 function jokerStart(){

@@ -62,6 +62,54 @@ function formatTimeRange(startLike, endLike){
   return `من ${formatTime(start)} إلى ${formatTime(end)}${crossesMidnight ? ' <span class="session-nextday">(اليوم الثاني)</span>' : ''}`;
 }
 
+/**
+ * تقسيم الجلسة التي تمتد عبر منتصف الليل (الساعة 12 ليلاً) إلى جلستين منفصلتين بدقة:
+ * - جزء اليوم الأول: من وقت البداية حتى منتصف الليل (23:59:59.999 / 24:00)
+ * - جزء اليوم الثاني: من منتصف الليل (00:00) حتى وقت الانتهاء
+ * إذا لم تعبر الجلسة منتصف الليل، تُرجع جلسة واحدة بنفس البيانات.
+ */
+function splitCrossMidnightSession(session){
+  if(!session || !session.start || !session.end) return [{ dayKey: (session && session.dayKey) || todayKey(), session: session || {} }];
+  const sStart = new Date(session.start);
+  const sEnd = new Date(session.end);
+  const startDay = todayKey(sStart);
+  const endDay = todayKey(sEnd);
+
+  if(startDay === endDay || sEnd <= sStart){
+    return [{ dayKey: startDay, session: { ...session } }];
+  }
+
+  // حساب نقطة منتصف الليل (بداية اليوم التالي عند 00:00:00)
+  const midnight = new Date(sStart.getFullYear(), sStart.getMonth(), sStart.getDate() + 1, 0, 0, 0, 0);
+  const minBefore = Math.max(1, Math.round((midnight.getTime() - sStart.getTime()) / 60000));
+  const minAfter = Math.max(1, Math.round((sEnd.getTime() - midnight.getTime()) / 60000));
+
+  const part1 = {
+    ...session,
+    id: session.id ? `${session.id}_p1` : uid(),
+    start: session.start,
+    end: midnight.toISOString(),
+    minutes: minBefore,
+    splitPairId: session.id || uid(),
+    splitPart: 'before_midnight'
+  };
+
+  const part2 = {
+    ...session,
+    id: session.id ? `${session.id}_p2` : uid(),
+    start: midnight.toISOString(),
+    end: session.end,
+    minutes: minAfter,
+    splitPairId: session.id || uid(),
+    splitPart: 'after_midnight'
+  };
+
+  return [
+    { dayKey: startDay, session: part1, durationMin: minBefore },
+    { dayKey: endDay, session: part2, durationMin: minAfter }
+  ];
+}
+
 function formatDateArabic(d){
   d = new Date(d);
   return `${AR_WEEKDAYS[d.getDay()]}، ${d.getDate()} ${AR_MONTHS[d.getMonth()]} ${d.getFullYear()}`;
