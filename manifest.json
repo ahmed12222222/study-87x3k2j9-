@@ -1,10 +1,10 @@
 {
-  "id": "/",
+  "id": "injaz-study-pwa",
   "name": "إنجاز — منصة تنظيم وقت الدراسة والمتابعة",
   "short_name": "إنجاز",
   "description": "منصة ذكية متكاملة لإدارة جلسات الدراسة، الاستراحات، أوقات النوم، والإنجازات اليومية مع لوحة تحكم ومتابعة حية",
-  "start_url": "/",
-  "scope": "/",
+  "start_url": "./",
+  "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#0d0e15",
@@ -14,25 +14,25 @@
   "categories": ["education", "productivity"],
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-maskable-192.png",
+      "src": "icon-maskable-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "maskable"
     },
     {
-      "src": "/icon-512.png",
+      "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/icon-maskable-512.png",
+      "src": "icon-maskable-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "maskable"
@@ -43,10 +43,10 @@
       "name": "لوحة المتابعة",
       "short_name": "المتابعة",
       "description": "عرض لوحة المتابعة الحية للزوار والمراقبين",
-      "url": "/",
+      "url": "./",
       "icons": [
         {
-          "src": "/icon-192.png",
+          "src": "icon-192.png",
           "sizes": "192x192",
           "type": "image/png"
         }
@@ -56,10 +56,10 @@
       "name": "لوحة الإدارة",
       "short_name": "الإدارة",
       "description": "تسجيل جلسات الدراسة والتحكم بالعداد",
-      "url": "/admin.html",
+      "url": "admin.html",
       "icons": [
         {
-          "src": "/icon-192.png",
+          "src": "icon-192.png",
           "sizes": "192x192",
           "type": "image/png"
         }
