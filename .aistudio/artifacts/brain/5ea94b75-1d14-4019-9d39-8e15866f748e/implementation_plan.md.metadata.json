@@ -1,6 +1,6 @@
 {
-  "summary":  "خطة شاملة لحل مشكلتي إشعارات الهاتف عبر الـ Service Worker/PWA خارج المتصفح، وإصلاح مزامنة وسحب بيانات StudyVault من Firebase على جوجل كروم وأوبسيديان Surfing.",
-  "updatedAt":  "2026-10-10T08:08:20.567195303Z",
+  "summary":  "خطة معالجة مشكلة تثبيت تطبيق إنجاز (PWA) على Google Chrome للهواتف وحل اختفاء أيقونة التطبيق عند الإضافة للشاشة الرئيسية (Desktop/Home Screen Shortcut)",
+  "updatedAt":  "2026-10-10T08:31:16.657951355Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

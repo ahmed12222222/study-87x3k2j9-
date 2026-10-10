@@ -109,62 +109,39 @@ app.get('/api/visits/today', (req, res) => {
   });
 });
 
-// PWA Service Worker & Manifest routes
+// PWA Service Worker & Manifest routes with full CORS support
 app.get('/sw.js', (req, res) => {
   res.setHeader('Content-Type', 'application/javascript; charset=UTF-8');
   res.setHeader('Service-Worker-Allowed', '/');
   res.setHeader('Cache-Control', 'no-cache');
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.sendFile(path.join(__dirname, 'sw.js'));
 });
 
 app.get(['/manifest.json', '/public/manifest.json'], (req, res) => {
   res.setHeader('Content-Type', 'application/manifest+json; charset=UTF-8');
   res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.setHeader('Access-Control-Allow-Origin', '*');
   res.sendFile(path.join(__dirname, 'manifest.json'));
 });
 
-// Explicit icon routes for mobile launchers & shortcuts
-app.get(['/favicon.ico', '/public/favicon.ico'], (req, res) => {
-  res.setHeader('Content-Type', 'image/x-icon');
+// Explicit icon routes for mobile launchers & shortcuts with solid CORS headers
+const serveIcon = (filePath, contentType = 'image/png') => (req, res) => {
+  res.setHeader('Content-Type', contentType);
   res.setHeader('Cache-Control', 'public, max-age=86400');
-  res.sendFile(path.join(__dirname, 'favicon.ico'));
-});
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+  res.sendFile(path.join(__dirname, filePath));
+};
 
-app.get(['/icon-192.png', '/public/icon-192.png'], (req, res) => {
-  res.setHeader('Content-Type', 'image/png');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  res.sendFile(path.join(__dirname, 'icon-192.png'));
-});
-
-app.get(['/icon-maskable-192.png', '/public/icon-maskable-192.png'], (req, res) => {
-  res.setHeader('Content-Type', 'image/png');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  res.sendFile(path.join(__dirname, 'icon-maskable-192.png'));
-});
-
-app.get(['/icon-512.png', '/public/icon-512.png'], (req, res) => {
-  res.setHeader('Content-Type', 'image/png');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  res.sendFile(path.join(__dirname, 'icon-512.png'));
-});
-
-app.get(['/icon-maskable-512.png', '/public/icon-maskable-512.png'], (req, res) => {
-  res.setHeader('Content-Type', 'image/png');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  res.sendFile(path.join(__dirname, 'icon-maskable-512.png'));
-});
-
-app.get(['/apple-touch-icon.png', '/public/apple-touch-icon.png'], (req, res) => {
-  res.setHeader('Content-Type', 'image/png');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  res.sendFile(path.join(__dirname, 'apple-touch-icon.png'));
-});
-
-app.get(['/favicon-32.png', '/public/favicon-32.png'], (req, res) => {
-  res.setHeader('Content-Type', 'image/png');
-  res.setHeader('Cache-Control', 'public, max-age=86400');
-  res.sendFile(path.join(__dirname, 'favicon-32.png'));
-});
+app.get(['/favicon.ico', '/public/favicon.ico'], serveIcon('favicon.ico', 'image/x-icon'));
+app.get(['/icon-192.png', '/public/icon-192.png'], serveIcon('icon-192.png'));
+app.get(['/icon-maskable-192.png', '/public/icon-maskable-192.png'], serveIcon('icon-maskable-192.png'));
+app.get(['/icon-512.png', '/public/icon-512.png'], serveIcon('icon-512.png'));
+app.get(['/icon-maskable-512.png', '/public/icon-maskable-512.png'], serveIcon('icon-maskable-512.png'));
+app.get(['/apple-touch-icon.png', '/public/apple-touch-icon.png'], serveIcon('apple-touch-icon.png'));
+app.get(['/favicon-32.png', '/public/favicon-32.png'], serveIcon('favicon-32.png'));
+app.get(['/icon.svg', '/public/icon.svg'], serveIcon('icon.svg', 'image/svg+xml'));
 
 // Clean route aliases BEFORE express.static
 app.get('/admin', (req, res) => {
