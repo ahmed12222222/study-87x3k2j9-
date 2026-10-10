@@ -1,5 +1,5 @@
-// sw.js — Service Worker لتشغيل تطبيق "إنجاز" بصورة مستقلة PWA
-const CACHE_NAME = 'injaz-pwa-v8';
+// sw.js — Service Worker لتشغيل تطبيق "إنجاز" بصورة مستقلة PWA وإدارة إشعارات النظام
+const CACHE_NAME = 'injaz-pwa-v9';
 
 const STATIC_ASSETS = [
   '/',
@@ -16,6 +16,8 @@ const STATIC_ASSETS = [
   '/js/shared.js',
   '/js/viewer.js',
   '/js/admin.js',
+  '/js/firebase-bridge.js',
+  '/js/studyvault-bridge.js',
   '/js/pwa-install.js',
   '/manifest.json',
   '/icon-192.png',
@@ -88,4 +90,109 @@ self.addEventListener('fetch', (event) => {
         });
       })
   );
+});
+
+/* -------------------------------------------------------------
+   إدارة إشعارات النظام (System Notifications) على الهاتف وخارج المتصفح
+------------------------------------------------------------- */
+
+// خريطة المؤقتات المجدولة في خلفية الـ Service Worker
+const backgroundReminders = new Map();
+
+self.addEventListener('message', (event) => {
+  if (!event.data) return;
+
+  // 1. إطلاق إشعار فوري عبر ServiceWorkerRegistration
+  if (event.data.type === 'SHOW_NOTIFICATION') {
+    const { title, options } = event.data;
+    const finalOptions = Object.assign({
+      icon: '/icon-192.png',
+      badge: '/favicon-32.png',
+      vibrate: [250, 100, 250, 100, 250],
+      data: { url: '/admin.html' }
+    }, options);
+
+    event.waitUntil(self.registration.showNotification(title || 'إنجاز', finalOptions));
+  }
+
+  // 2. جدولة إشعار في الخلفية عند مغادرة الصفحة أو توقف الدراسة
+  else if (event.data.type === 'SCHEDULE_INACTIVITY_REMINDER') {
+    const { id, delayMs, title, options } = event.data;
+    if (backgroundReminders.has(id)) {
+      clearTimeout(backgroundReminders.get(id));
+      backgroundReminders.delete(id);
+    }
+
+    if (delayMs > 0) {
+      const timer = setTimeout(() => {
+        const finalOptions = Object.assign({
+          icon: '/icon-192.png',
+          badge: '/favicon-32.png',
+          vibrate: [300, 120, 300, 120, 300],
+          data: { url: '/admin.html' }
+        }, options);
+
+        self.registration.showNotification(title || 'إنجاز - تذكير الانقطاع', finalOptions);
+        backgroundReminders.delete(id);
+      }, delayMs);
+
+      backgroundReminders.set(id, timer);
+    }
+  }
+
+  // 3. مسح جميع التذكيرات المجدولة فور بدء الدراسة
+  else if (event.data.type === 'CLEAR_INACTIVITY_REMINDERS') {
+    backgroundReminders.forEach((timer) => clearTimeout(timer));
+    backgroundReminders.clear();
+  }
+});
+
+// التعامل مع النقر على الإشعار من شريط إشعارات الهاتف أو قفل الشاشة
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const targetUrl = (event.notification.data && event.notification.data.url) || '/admin.html';
+
+  event.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((clientList) => {
+      // إذا كان هناك تبويب مفتوح للتطبيق بالفعل، نفعله ونركز عليه
+      for (const client of clientList) {
+        if (client.url && 'focus' in client) {
+          if (!client.url.includes(targetUrl) && 'navigate' in client) {
+            client.navigate(targetUrl);
+          }
+          return client.focus();
+        }
+      }
+      // إذا لم يكن مفتوحاً، نفتح نافذة جديدة للتطبيق
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
+      }
+    })
+  );
+});
+
+// استقبال إشعارات Push في حال توفرها
+self.addEventListener('push', (event) => {
+  let data = {};
+  if (event.data) {
+    try {
+      data = event.data.json();
+    } catch (e) {
+      data = { title: 'إنجاز', body: event.data.text() };
+    }
+  }
+
+  const title = data.title || 'إنجاز - تنبيه دراسي';
+  const options = {
+    body: data.body || 'لا تنسَ متابعة جلساتك وإكمال أهدافك اليوم!',
+    icon: data.icon || '/icon-192.png',
+    badge: data.badge || '/favicon-32.png',
+    vibrate: data.vibrate || [250, 100, 250, 100, 250],
+    tag: data.tag || 'injaz-push-alert',
+    renotify: true,
+    data: { url: data.url || '/admin.html' }
+  };
+
+  event.waitUntil(self.registration.showNotification(title, options));
 });

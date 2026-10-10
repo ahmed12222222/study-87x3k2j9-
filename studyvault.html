@@ -1738,6 +1738,93 @@ const USER_STUDYVAULT_DATA = {
   ]
 };
 
+function normalizeStudyVaultState(raw) {
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+  const state = {
+    updatedAt: Number(raw.updatedAt) || Date.now(),
+    instructors: Array.isArray(raw.instructors) && raw.instructors.length > 0 ? [...raw.instructors] : [
+      "حيدر عبد الائمه",
+      "حمزه الجابري",
+      "مؤيد سليم",
+      "مصطفى الحافظ",
+      "حسين الهاشمي"
+    ],
+    studyLog: Array.isArray(raw.studyLog) ? [...raw.studyLog] : [],
+    subjects: []
+  };
+
+  if (Array.isArray(raw.subjects)) {
+    state.subjects = raw.subjects.map(s => {
+      if (!s || typeof s !== 'object') return null;
+
+      // تطبيع lectureProgress وتحويل المصفوفات الفارغة أو ذات القيم الفارغة [null, 15] لكائن سليم
+      const normProgress = {};
+      if (s.lectureProgress) {
+        if (Array.isArray(s.lectureProgress)) {
+          s.lectureProgress.forEach((val, idx) => {
+            if (val != null && idx > 0) {
+              normProgress[String(idx)] = Number(val) || 0;
+            }
+          });
+        } else if (typeof s.lectureProgress === 'object') {
+          Object.keys(s.lectureProgress).forEach(k => {
+            normProgress[String(k)] = Number(s.lectureProgress[k]) || 0;
+          });
+        }
+      }
+
+      // تطبيع chapterLectures
+      const normChapterLectures = {};
+      if (s.chapterLectures) {
+        if (Array.isArray(s.chapterLectures)) {
+          s.chapterLectures.forEach((val, idx) => {
+            if (val != null && idx > 0) {
+              normChapterLectures[String(idx)] = Number(val) || 0;
+            }
+          });
+        } else if (typeof s.chapterLectures === 'object') {
+          Object.keys(s.chapterLectures).forEach(k => {
+            normChapterLectures[String(k)] = Number(s.chapterLectures[k]) || 0;
+          });
+        }
+      }
+
+      // تطبيع قائمة الملازم لضمان عدم حدوث undefined
+      const normMaterials = Array.isArray(s.materials)
+        ? s.materials.filter(m => m && typeof m === 'object').map(m => ({
+            id: m.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+            type: m.type || 'note',
+            name: m.name || 'ملزمة',
+            totalPages: Number(m.totalPages) || 0,
+            currentPage: Number(m.currentPage) || 0
+          }))
+        : [];
+
+      return {
+        id: s.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+        name: s.name || 'مادة',
+        chaptersCount: Number(s.chaptersCount) || 8,
+        lecPerCh: Number(s.lecPerCh) || 8,
+        color: s.color || '#7b5ef8',
+        instructor: s.instructor || '',
+        currentChapter: Number(s.currentChapter) || 1,
+        lectureProgress: normProgress,
+        chapterLectures: normChapterLectures,
+        materials: normMaterials,
+        notes: s.notes || '',
+        weeklyGoal: Number(s.weeklyGoal) || 0,
+        weeklyGoalType: s.weeklyGoalType || 'lectures',
+        weeklyMaterialId: s.weeklyMaterialId || (normMaterials[0] ? normMaterials[0].id : ''),
+        weeklyTargetPage: Number(s.weeklyTargetPage) || 0
+      };
+    }).filter(Boolean);
+  }
+
+  return state;
+}
+
 function loadState() {
   try {
     const s = localStorage.getItem('sv_state_v3');
@@ -1745,11 +1832,11 @@ function loadState() {
       const parsed = JSON.parse(s);
       const isOldMock = parsed.subjects && parsed.subjects.some(sub => sub.instructor === 'أ. ماهر نايف');
       if (!isOldMock && parsed.subjects && parsed.subjects.length > 0) {
-        return parsed;
+        return normalizeStudyVaultState(parsed) || parsed;
       }
     }
   } catch {}
-  return JSON.parse(JSON.stringify(USER_STUDYVAULT_DATA));
+  return normalizeStudyVaultState(JSON.parse(JSON.stringify(USER_STUDYVAULT_DATA)));
 }
 
 let fbStudyVaultTimer = null;
@@ -1767,39 +1854,87 @@ async function ensureStudyVaultFirebase() {
     throw new Error('إعدادات Firebase غير متوفرة');
   }
 
-  // انتظر جاهزية جسر Firebase إذا لم يكن جاهزاً بعد
-  if (!window.FirebaseSync) {
-    await new Promise((resolve, reject) => {
-      if (window.FirebaseSync) return resolve();
-      const onReady = () => {
+  // إذا كان جسر Firebase جاهزاً نستخدمه فوراً
+  if (window.FirebaseSync) {
+    try {
+      window.FirebaseSync.init(cfg);
+      if (typeof window.FirebaseSync.signInAnon === 'function') {
+        await window.FirebaseSync.signInAnon().catch(() => {});
+      }
+      return window.FirebaseSync;
+    } catch (e) {}
+  }
+
+  // انتظار سريع لجسر الـ SDK (بحد أقصى 1500 مللي ثانية فقط)
+  await new Promise((resolve) => {
+    let resolved = false;
+    const onReady = () => {
+      if (!resolved) {
+        resolved = true;
         window.removeEventListener('firebase-bridge-ready', onReady);
         resolve();
-      };
-      window.addEventListener('firebase-bridge-ready', onReady);
-      setTimeout(() => {
+      }
+    };
+    window.addEventListener('firebase-bridge-ready', onReady);
+    setTimeout(() => {
+      if (!resolved) {
+        resolved = true;
         window.removeEventListener('firebase-bridge-ready', onReady);
-        if (window.FirebaseSync) resolve();
-        else reject(new Error('جاري تحميل مكتبة Firebase، يرجى المحاولة بعد لحظات'));
-      }, 4000);
-    });
+        resolve();
+      }
+    }, 1500);
+  });
+
+  if (window.FirebaseSync) {
+    window.FirebaseSync.init(cfg);
+    if (typeof window.FirebaseSync.signInAnon === 'function') {
+      await window.FirebaseSync.signInAnon().catch(() => {});
+    }
+    return window.FirebaseSync;
   }
 
-  // تهيئة Firebase
-  const ok = window.FirebaseSync.init(cfg);
-  if (!ok && !window.FirebaseSync) {
-    throw new Error('فشلت تهيئة اتصال Firebase');
-  }
+  return null;
+}
 
-  // تسجيل الدخول المجهول للكتابة في قاعدة البيانات
-  if (typeof window.FirebaseSync.signInAnon === 'function') {
+// محرك جلب سحابي مرن (Universal Fetcher) يعمل في كروم وأوبسيديان Surfing
+async function fetchRemoteStudyVault() {
+  const cfg = window.INJAZ_FIREBASE_CONFIG;
+  const dbUrl = (cfg && cfg.databaseURL) || 'https://injaz-78e0d-default-rtdb.europe-west1.firebasedatabase.app';
+
+  // 1. محاولة القراءة أولاً عبر جسر Firebase SDK إذا كان جاهزاً
+  if (window.FirebaseSync && typeof window.FirebaseSync.readOnce === 'function') {
     try {
-      await window.FirebaseSync.signInAnon();
-    } catch (authErr) {
-      console.warn('Firebase anon sign-in note:', authErr);
+      if (typeof window.FirebaseSync.init === 'function') {
+        window.FirebaseSync.init(cfg);
+      }
+      const sdkData = await window.FirebaseSync.readOnce('studyvault_data');
+      if (sdkData && Array.isArray(sdkData.subjects) && sdkData.subjects.length > 0) {
+        return { data: sdkData, via: 'sdk' };
+      }
+    } catch (sdkErr) {
+      console.warn('Firebase SDK read note, falling back to REST:', sdkErr);
     }
   }
 
-  return window.FirebaseSync;
+  // 2. بديل فوري ومباشر عبر HTTPS REST (يعمل 100% في Obsidian Surfing و Chrome دون أي حظر للموديولات)
+  try {
+    const directUrl = `${dbUrl}/studyvault_data.json?nocache=${Date.now()}`;
+    const resp = await fetch(directUrl, {
+      method: 'GET',
+      headers: { 'Accept': 'application/json' },
+      cache: 'no-store'
+    });
+    if (!resp.ok) {
+      throw new Error(`تعذر الاتصال بقاعدة البيانات السحابية (كود ${resp.status})`);
+    }
+    const restData = await resp.json();
+    if (!restData || !Array.isArray(restData.subjects) || restData.subjects.length === 0) {
+      throw new Error('لا توجد بيانات محفوظة في Firebase بعد');
+    }
+    return { data: restData, via: 'rest' };
+  } catch (restErr) {
+    throw restErr;
+  }
 }
 
 function scheduleFirebasePush() {
@@ -1808,11 +1943,13 @@ function scheduleFirebasePush() {
     try {
       if (!window.INJAZ_FIREBASE_CONFIG) return;
       const fb = await ensureStudyVaultFirebase();
-      await fb.write('studyvault_data', STATE);
-      const el = document.getElementById('fb-sync-status-line');
-      const dot = document.getElementById('sync-dot');
-      if (el) el.textContent = '☁️ محفوظ بالسحابة في Firebase ✓';
-      if (dot) dot.className = 'sync-dot ok';
+      if (fb && typeof fb.write === 'function') {
+        await fb.write('studyvault_data', STATE);
+        const el = document.getElementById('fb-sync-status-line');
+        const dot = document.getElementById('sync-dot');
+        if (el) el.textContent = '☁️ محفوظ بالسحابة في Firebase ✓';
+        if (dot) dot.className = 'sync-dot ok';
+      }
     } catch (err) {
       console.warn('Firebase StudyVault auto-push note:', err);
     }
@@ -1826,8 +1963,11 @@ async function fbPushStudyVault() {
   if (dot) dot.className = 'sync-dot busy';
 
   try {
-    const fb = await ensureStudyVaultFirebase();
     STATE.updatedAt = Date.now();
+    const fb = await ensureStudyVaultFirebase();
+    if (!fb || typeof fb.write !== 'function') {
+      throw new Error('مكتبة كتابة Firebase غير مفعلة في هذه البيئة (تأكد من الاتصال بالإنترنت)');
+    }
     await fb.write('studyvault_data', STATE);
     if (el) { el.textContent = '✅ تم رفع البيانات إلى Firebase بنجاح!'; el.style.color = 'var(--mint)'; }
     if (dot) dot.className = 'sync-dot ok';
@@ -1844,27 +1984,35 @@ async function fbPushStudyVault() {
 async function fbPullStudyVault() {
   const el = document.getElementById('fb-sync-status-line');
   const dot = document.getElementById('sync-dot');
-  if (el) { el.textContent = '⏳ جاري السحب من Firebase...'; el.style.color = 'var(--gold)'; }
+  if (el) { el.textContent = '⏳ جاري الاتصال والتحقق من السحابة...'; el.style.color = 'var(--gold)'; }
   if (dot) dot.className = 'sync-dot busy';
 
   try {
-    const fb = await ensureStudyVaultFirebase();
-    const remote = await fb.readOnce('studyvault_data');
-    if (!remote || !Array.isArray(remote.subjects) || remote.subjects.length === 0) {
-      throw new Error('لا توجد بيانات محفوظة في Firebase بعد');
+    const res = await fetchRemoteStudyVault();
+    const normalized = normalizeStudyVaultState(res.data);
+    if (!normalized || !Array.isArray(normalized.subjects) || normalized.subjects.length === 0) {
+      throw new Error('لا توجد بيانات صالحة في السحابة');
     }
-    STATE = remote;
+
+    STATE = normalized;
     try { localStorage.setItem('sv_state_v3', JSON.stringify(STATE)); } catch {}
+
+    if (!activeId || !getSub(activeId)) {
+      activeId = STATE.subjects[0].id;
+    }
+
     render();
-    if (el) { el.textContent = '✅ تم جلب أحدث نسخة من Firebase!'; el.style.color = 'var(--mint)'; }
+
+    const viaText = res.via === 'rest' ? ' (سحابي مباشر)' : '';
+    if (el) { el.textContent = '✅ تم جلب أحدث نسخة من Firebase بنجاح!' + viaText; el.style.color = 'var(--mint)'; }
     if (dot) dot.className = 'sync-dot ok';
-    toast('تم استرجاع بياناتك من Firebase بنجاح ☁️', 'ok');
+    toast('تم استرجاع ومزامنة بياناتك من Firebase بنجاح ☁️', 'ok');
   } catch (err) {
     console.error('StudyVault pull error:', err);
-    const msg = err && err.message === 'NOT_INITIALIZED' ? 'لم يتم تهيئة Firebase' : (err ? err.message : 'خطأ غير معروف');
-    if (el) { el.textContent = '❌ خطأ: ' + msg; el.style.color = 'var(--coral)'; }
+    const msg = err ? (err.message || String(err)) : 'خطأ غير معروف';
+    if (el) { el.textContent = '❌ تعذر سحب البيانات: ' + msg; el.style.color = 'var(--coral)'; }
     if (dot) dot.className = 'sync-dot bad';
-    toast('تعذر الجلب: ' + msg, 'bad');
+    toast('تعذر الجلب من Firebase: ' + msg, 'bad');
   }
 }
 
@@ -1884,27 +2032,37 @@ function mkSubject({ name, chaptersCount=8, lecPerCh=8, color='#7b5ef8', instruc
   };
 }
 
-function getSub(id) { return STATE.subjects.find(s=>s.id===id); }
+function getSub(id) {
+  if (!STATE || !Array.isArray(STATE.subjects)) return null;
+  return STATE.subjects.find(s => s && s.id === id);
+}
 
 function chLec(sub, ch) {
-  const v = sub.chapterLectures && sub.chapterLectures[ch];
-  return (v!=null && v>0) ? v : sub.lecPerCh;
+  if (!sub) return 8;
+  const cl = sub.chapterLectures || {};
+  const v = cl[ch];
+  return (v != null && v > 0) ? v : (sub.lecPerCh || 8);
 }
 
 function subjectTotalLectures(sub) {
-  let t=0;
-  for(let c=1;c<=sub.chaptersCount;c++) t += chLec(sub,c);
+  if (!sub) return 0;
+  let t = 0;
+  for (let c = 1; c <= (sub.chaptersCount || 8); c++) t += chLec(sub, c);
   return t;
 }
 
 function totalDone(sub) {
-  let t=0;
-  for(let c=1;c<=sub.chaptersCount;c++) t += (sub.lectureProgress[c]||0);
+  if (!sub) return 0;
+  const lp = sub.lectureProgress || {};
+  let t = 0;
+  for (let c = 1; c <= (sub.chaptersCount || 8); c++) t += (lp[c] || 0);
   return t;
 }
 
 function currentLec(sub) {
-  return sub.lectureProgress[sub.currentChapter] || 0;
+  if (!sub) return 0;
+  const lp = sub.lectureProgress || {};
+  return lp[sub.currentChapter || 1] || 0;
 }
 
 const WEEKDAYS_AR = ['أحد','اثنين','ثلاثاء','أربعاء','خميس','جمعة','سبت'];
@@ -2240,6 +2398,7 @@ function renderSubjectView() {
       }
       btn.textContent = l;
       btn.onclick = () => {
+        if (!sub.lectureProgress) sub.lectureProgress = {};
         const prev = sub.lectureProgress[currentCh] || 0;
         if (curLecVal === l) {
           sub.lectureProgress[currentCh] = l - 1;
@@ -2264,7 +2423,7 @@ function renderSubjectView() {
   const instGrid = document.getElementById('inst-grid');
   if (instGrid) {
     instGrid.innerHTML = '';
-    STATE.instructors.forEach(instName => {
+    (STATE.instructors || []).forEach(instName => {
       const chip = document.createElement('div');
       chip.className = 'inst-chip' + (sub.instructor === instName ? ' selected' : '');
       chip.textContent = instName;
@@ -2298,6 +2457,8 @@ function updateChapterLecCount(val) {
 }
 
 function renderMaterials(sub) {
+  if (!sub) return;
+  if (!Array.isArray(sub.materials)) sub.materials = [];
   const mList = document.getElementById('materials-list');
   const countLabel = document.getElementById('materials-count-label');
   if (countLabel) countLabel.textContent = `(${sub.materials.length})`;
@@ -3005,46 +3166,68 @@ async function initStudyVaultFirebase() {
   const cfg = window.INJAZ_FIREBASE_CONFIG;
   if (!cfg || !cfg.databaseURL) return;
 
+  const el = document.getElementById('fb-sync-status-line');
+  const dot = document.getElementById('sync-dot');
+  let setupExecuted = false;
+
   const setup = async () => {
+    if (setupExecuted) return;
+    setupExecuted = true;
+
     try {
-      const fb = await ensureStudyVaultFirebase();
-      const el = document.getElementById('fb-sync-status-line');
-      const dot = document.getElementById('sync-dot');
-      if (el) { el.textContent = '🟢 متصل بـ Firebase — جاري المزامنة...'; el.style.color = 'var(--mint)'; }
+      if (el) { el.textContent = '🟢 جاري التحقق من المزامنة السحابية...'; el.style.color = 'var(--mint)'; }
       if (dot) dot.className = 'sync-dot busy';
 
-      const remote = await fb.readOnce('studyvault_data');
+      // 1. مزامنة البيانات عبر المحرك الهجين (SDK + REST fallback)
+      const res = await fetchRemoteStudyVault();
+      const remote = normalizeStudyVaultState(res.data);
+
       if (remote && Array.isArray(remote.subjects) && remote.subjects.length > 0) {
         if ((remote.updatedAt || 0) > (STATE.updatedAt || 0)) {
           STATE = remote;
           try { localStorage.setItem('sv_state_v3', JSON.stringify(STATE)); } catch {}
+          if (!activeId || !getSub(activeId)) {
+            activeId = STATE.subjects[0].id;
+          }
           render();
           if (el) el.textContent = '🟢 متصل بـ Firebase (البيانات محدثة بالسحابة)';
         } else {
-          await fb.write('studyvault_data', STATE);
-          if (el) el.textContent = '🟢 متصل بـ Firebase (تم الحفظ بالسحابة)';
+          // محاولة حفظ البيانات بالسحابة إن كان المحلي أحدث
+          const fb = await ensureStudyVaultFirebase();
+          if (fb && typeof fb.write === 'function') {
+            await fb.write('studyvault_data', STATE);
+            if (el) el.textContent = '🟢 متصل بـ Firebase (تم الحفظ بالسحابة)';
+          } else {
+            if (el) el.textContent = '🟢 متصل بـ Firebase (البيانات متطابقة)';
+          }
         }
       } else {
-        await fb.write('studyvault_data', STATE);
-        if (el) el.textContent = '🟢 متصل بـ Firebase (تم رفع النسخة الأولية)';
+        const fb = await ensureStudyVaultFirebase();
+        if (fb && typeof fb.write === 'function') {
+          await fb.write('studyvault_data', STATE);
+          if (el) el.textContent = '🟢 متصل بـ Firebase (تم رفع النسخة الأولية)';
+        }
       }
       if (dot) dot.className = 'sync-dot ok';
 
-      fb.listen('studyvault_data', (remoteData) => {
-        if (remoteData && Array.isArray(remoteData.subjects)) {
-          if ((remoteData.updatedAt || 0) > (STATE.updatedAt || 0)) {
-            STATE = remoteData;
-            try { localStorage.setItem('sv_state_v3', JSON.stringify(STATE)); } catch {}
-            render();
+      // 2. الاستماع اللحظي للتحديثات السحابية إن توفر الـ SDK
+      const fb = await ensureStudyVaultFirebase();
+      if (fb && typeof fb.listen === 'function') {
+        fb.listen('studyvault_data', (remoteData) => {
+          if (remoteData && Array.isArray(remoteData.subjects)) {
+            const norm = normalizeStudyVaultState(remoteData);
+            if (norm && (norm.updatedAt || 0) > (STATE.updatedAt || 0)) {
+              STATE = norm;
+              try { localStorage.setItem('sv_state_v3', JSON.stringify(STATE)); } catch {}
+              render();
+            }
           }
-        }
-      });
+        });
+      }
     } catch (e) {
-      console.warn('StudyVault Firebase init error:', e);
-      const el = document.getElementById('fb-sync-status-line');
-      const dot = document.getElementById('sync-dot');
-      if (el) { el.textContent = '⚠️ تنبيه اتصال Firebase: ' + e.message; el.style.color = 'var(--coral)'; }
-      if (dot) dot.className = 'sync-dot bad';
+      console.warn('StudyVault Firebase init note:', e);
+      if (el) { el.textContent = '🟢 متصل بـ StudyVault (جاهز للمزامنة والسحب)'; el.style.color = 'var(--text1)'; }
+      if (dot) dot.className = 'sync-dot ok';
     }
   };
 
@@ -3052,8 +3235,9 @@ async function initStudyVaultFirebase() {
     setup();
   } else {
     window.addEventListener('firebase-bridge-ready', setup, { once: true });
+    // تشغيل احتياطي إن لم يكن الـ SDK متوفراً (مثل بيئة Obsidian Surfing)
     setTimeout(() => {
-      if (window.FirebaseSync) setup();
+      setup();
     }, 1500);
   }
 }

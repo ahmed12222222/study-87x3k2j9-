@@ -23,7 +23,8 @@ const LRI = '\u2066', PDI = '\u2069';
 function isolateNum(n){ return `${LRI}${n}${PDI}`; }
 
 function todayKey(d){
-  d = d || new Date();
+  if(!d) d = new Date();
+  else if(!(d instanceof Date)) d = new Date(d);
   return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
 }
 
@@ -64,43 +65,50 @@ function formatTimeRange(startLike, endLike){
 
 /**
  * تقسيم الجلسة التي تمتد عبر منتصف الليل (الساعة 12 ليلاً) إلى جلستين منفصلتين بدقة:
- * - جزء اليوم الأول: من وقت البداية حتى منتصف الليل (23:59:59.999 / 24:00)
- * - جزء اليوم الثاني: من منتصف الليل (00:00) حتى وقت الانتهاء
+ * - جزء اليوم الأول (البارحة): من وقت البداية حتى منتصف الليل (00:00:00)
+ * - جزء اليوم الثاني (اليوم): من منتصف الليل (00:00:00) حتى وقت الاستيقاظ/النهاية
  * إذا لم تعبر الجلسة منتصف الليل، تُرجع جلسة واحدة بنفس البيانات.
  */
 function splitCrossMidnightSession(session){
   if(!session || !session.start || !session.end) return [{ dayKey: (session && session.dayKey) || todayKey(), session: session || {} }];
   const sStart = new Date(session.start);
   const sEnd = new Date(session.end);
+  if(isNaN(sStart.getTime()) || isNaN(sEnd.getTime()) || sEnd <= sStart){
+    return [{ dayKey: todayKey(sStart), session: { ...session } }];
+  }
   const startDay = todayKey(sStart);
-  const endDay = todayKey(sEnd);
 
-  if(startDay === endDay || sEnd <= sStart){
+  // حساب نقطة منتصف الليل لهذا اليوم (00:00:00 من بداية اليوم التالي بالتوقيت المحلي)
+  const midnight = new Date(sStart.getFullYear(), sStart.getMonth(), sStart.getDate() + 1, 0, 0, 0, 0);
+
+  // إذا كانت نهاية الجلسة لا تتجاوز منتصف الليل، فالجلسة تقع بالكامل ضمن نفس اليوم
+  if(sEnd.getTime() <= midnight.getTime()){
     return [{ dayKey: startDay, session: { ...session } }];
   }
 
-  // حساب نقطة منتصف الليل (بداية اليوم التالي عند 00:00:00)
-  const midnight = new Date(sStart.getFullYear(), sStart.getMonth(), sStart.getDate() + 1, 0, 0, 0, 0);
+  const endDay = todayKey(sEnd);
   const minBefore = Math.max(1, Math.round((midnight.getTime() - sStart.getTime()) / 60000));
   const minAfter = Math.max(1, Math.round((sEnd.getTime() - midnight.getTime()) / 60000));
 
+  const baseId = session.splitPairId || (session.id ? session.id.replace(/_p[12]$/, '') : uid());
+
   const part1 = {
     ...session,
-    id: session.id ? `${session.id}_p1` : uid(),
+    id: `${baseId}_p1`,
     start: session.start,
     end: midnight.toISOString(),
     minutes: minBefore,
-    splitPairId: session.id || uid(),
+    splitPairId: baseId,
     splitPart: 'before_midnight'
   };
 
   const part2 = {
     ...session,
-    id: session.id ? `${session.id}_p2` : uid(),
+    id: `${baseId}_p2`,
     start: midnight.toISOString(),
     end: session.end,
     minutes: minAfter,
-    splitPairId: session.id || uid(),
+    splitPairId: baseId,
     splitPart: 'after_midnight'
   };
 
@@ -108,6 +116,79 @@ function splitCrossMidnightSession(session){
     { dayKey: startDay, session: part1, durationMin: minBefore },
     { dayKey: endDay, session: part2, durationMin: minAfter }
   ];
+}
+
+/**
+ * دالة تطهير وفحص البيانات الشاملة:
+ * تفحص جميع الجلسات المسجلة في كل الأيام (نوم، دراسة، استراحة)، وإذا وجدت أي جلسة
+ * تمتد عبر منتصف الليل (مثل نوم بدأ 9م الجمعة واستمر إلى 4ص السبت)، تقوم أوتوماتيكياً
+ * بتقسيمها فوراً: ساعات ما قبل منتصف الليل إلى اليوم السابق، وساعات ما بعد منتصف الليل إلى اليوم الحالي.
+ * تضمن عدم وجود جلسات محصورة بالكامل في يوم واحد مع وقت عابر لليوم الثاني.
+ */
+function normalizeCrossMidnightSessions(data){
+  if(!data || !data.days) return { data, changed: false };
+  let changed = false;
+  const cats = ['study', 'breaks', 'sleep'];
+
+  const dayKeys = Object.keys(data.days);
+  for(const dKey of dayKeys){
+    const day = data.days[dKey];
+    if(!day) continue;
+    for(const cat of cats){
+      const list = day[cat];
+      if(!Array.isArray(list) || list.length === 0) continue;
+
+      const newList = [];
+      for(const s of list){
+        if(!s || !s.start || !s.end){
+          newList.push(s);
+          continue;
+        }
+        const sStart = new Date(s.start);
+        const sEnd = new Date(s.end);
+        if(isNaN(sStart.getTime()) || isNaN(sEnd.getTime()) || sEnd <= sStart){
+          newList.push(s);
+          continue;
+        }
+
+        const midnight = new Date(sStart.getFullYear(), sStart.getMonth(), sStart.getDate() + 1, 0, 0, 0, 0);
+
+        // إذا تجاوزت الجلسة منتصف الليل ولم تكن مقسمة بالفعل كجزء أول
+        if(sEnd.getTime() > midnight.getTime() && s.splitPart !== 'before_midnight'){
+          changed = true;
+          const parts = splitCrossMidnightSession(s);
+          const p1 = parts[0];
+          const p2 = parts[1];
+
+          // التأكد من وجود سجلات الأيام المستهدفة
+          if(!data.days[p1.dayKey]) data.days[p1.dayKey] = { study: [], breaks: [], sleep: [], achievements: [] };
+          if(!data.days[p2.dayKey]) data.days[p2.dayKey] = { study: [], breaks: [], sleep: [], achievements: [] };
+          if(!Array.isArray(data.days[p1.dayKey][cat])) data.days[p1.dayKey][cat] = [];
+          if(!Array.isArray(data.days[p2.dayKey][cat])) data.days[p2.dayKey][cat] = [];
+
+          // وضع الجزء الأول (قبل منتصف الليل) في يوم البداية
+          if(dKey === p1.dayKey){
+            newList.push(p1.session);
+          } else {
+            const p1Arr = data.days[p1.dayKey][cat];
+            const exIdx = p1Arr.findIndex(x => x && (x.id === p1.session.id || (x.splitPairId && x.splitPairId === p1.session.splitPairId && x.splitPart === 'before_midnight')));
+            if(exIdx >= 0) p1Arr[exIdx] = p1.session;
+            else p1Arr.push(p1.session);
+          }
+
+          // وضع الجزء الثاني (بعد منتصف الليل) في يوم النهاية
+          const p2Arr = data.days[p2.dayKey][cat];
+          const ex2Idx = p2Arr.findIndex(x => x && (x.id === p2.session.id || (x.splitPairId && x.splitPairId === p2.session.splitPairId && x.splitPart === 'after_midnight')));
+          if(ex2Idx >= 0) p2Arr[ex2Idx] = p2.session;
+          else p2Arr.push(p2.session);
+        } else {
+          newList.push(s);
+        }
+      }
+      day[cat] = newList;
+    }
+  }
+  return { data, changed };
 }
 
 function formatDateArabic(d){
@@ -197,12 +278,17 @@ function loadData(){
     if(!raw) return defaultData();
     const parsed = JSON.parse(raw);
     const base = defaultData();
-    return {
+    const data = {
       ...base, ...parsed,
       settings: migrateGoalTiers({ ...base.settings, ...(parsed.settings || {}), customTheme: { ...base.settings.customTheme, ...((parsed.settings||{}).customTheme || {}) } }, parsed.settings),
       days: parsed.days || {},
       review: { subjects: (parsed.review && parsed.review.subjects) || [], items: (parsed.review && parsed.review.items) || [] },
     };
+    const norm = normalizeCrossMidnightSessions(data);
+    if(norm.changed){
+      saveData(norm.data);
+    }
+    return norm.data;
   }catch(e){ console.error('loadData:', e); return defaultData(); }
 }
 

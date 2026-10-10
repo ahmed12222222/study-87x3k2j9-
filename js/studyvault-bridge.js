@@ -131,24 +131,101 @@ const USER_STUDYVAULT_DATA = {
   ]
 };
 
+function normalizeStudyVaultData(raw) {
+  if (!raw || typeof raw !== 'object') return null;
+  const state = {
+    updatedAt: Number(raw.updatedAt) || Date.now(),
+    instructors: Array.isArray(raw.instructors) && raw.instructors.length > 0 ? [...raw.instructors] : [
+      "حيدر عبد الائمه",
+      "حمزه الجابري",
+      "مؤيد سليم",
+      "مصطفى الحافظ",
+      "حسين الهاشمي"
+    ],
+    studyLog: Array.isArray(raw.studyLog) ? [...raw.studyLog] : [],
+    subjects: []
+  };
+
+  if (Array.isArray(raw.subjects)) {
+    state.subjects = raw.subjects.map(s => {
+      if (!s || typeof s !== 'object') return null;
+
+      const normProgress = {};
+      if (s.lectureProgress) {
+        if (Array.isArray(s.lectureProgress)) {
+          s.lectureProgress.forEach((val, idx) => {
+            if (val != null && idx > 0) normProgress[String(idx)] = Number(val) || 0;
+          });
+        } else if (typeof s.lectureProgress === 'object') {
+          Object.keys(s.lectureProgress).forEach(k => {
+            normProgress[String(k)] = Number(s.lectureProgress[k]) || 0;
+          });
+        }
+      }
+
+      const normChapterLectures = {};
+      if (s.chapterLectures) {
+        if (Array.isArray(s.chapterLectures)) {
+          s.chapterLectures.forEach((val, idx) => {
+            if (val != null && idx > 0) normChapterLectures[String(idx)] = Number(val) || 0;
+          });
+        } else if (typeof s.chapterLectures === 'object') {
+          Object.keys(s.chapterLectures).forEach(k => {
+            normChapterLectures[String(k)] = Number(s.chapterLectures[k]) || 0;
+          });
+        }
+      }
+
+      const normMaterials = Array.isArray(s.materials)
+        ? s.materials.filter(m => m && typeof m === 'object').map(m => ({
+            id: m.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+            type: m.type || 'note',
+            name: m.name || 'ملزمة',
+            totalPages: Number(m.totalPages) || 0,
+            currentPage: Number(m.currentPage) || 0
+          }))
+        : [];
+
+      return {
+        id: s.id || (Date.now().toString(36) + Math.random().toString(36).slice(2, 6)),
+        name: s.name || 'مادة',
+        chaptersCount: Number(s.chaptersCount) || 8,
+        lecPerCh: Number(s.lecPerCh) || 8,
+        color: s.color || '#7b5ef8',
+        instructor: s.instructor || '',
+        currentChapter: Number(s.currentChapter) || 1,
+        lectureProgress: normProgress,
+        chapterLectures: normChapterLectures,
+        materials: normMaterials,
+        notes: s.notes || '',
+        weeklyGoal: Number(s.weeklyGoal) || 0,
+        weeklyGoalType: s.weeklyGoalType || 'lectures',
+        weeklyMaterialId: s.weeklyMaterialId || (normMaterials[0] ? normMaterials[0].id : ''),
+        weeklyTargetPage: Number(s.weeklyTargetPage) || 0
+      };
+    }).filter(Boolean);
+  }
+  return state;
+}
+
 function getStudyVaultState() {
   try {
     const raw = localStorage.getItem(SV_STORAGE_KEY);
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && Array.isArray(parsed.subjects) && parsed.subjects.length > 0) {
-        if (!parsed.studyLog) parsed.studyLog = [];
-        return parsed;
+        const norm = normalizeStudyVaultData(parsed);
+        if (norm) return norm;
       }
     }
   } catch (e) {
     console.error('Error loading StudyVault state:', e);
   }
-  // إذا لم توجد بيانات مخزنة، نعتمد بيانات المستخدم مباشرة
+  const fallback = normalizeStudyVaultData(USER_STUDYVAULT_DATA) || USER_STUDYVAULT_DATA;
   try {
-    localStorage.setItem(SV_STORAGE_KEY, JSON.stringify(USER_STUDYVAULT_DATA));
+    localStorage.setItem(SV_STORAGE_KEY, JSON.stringify(fallback));
   } catch {}
-  return JSON.parse(JSON.stringify(USER_STUDYVAULT_DATA));
+  return JSON.parse(JSON.stringify(fallback));
 }
 
 let fbSvPushTimer = null;
@@ -172,45 +249,80 @@ function saveStudyVaultState(state) {
   }
 }
 
+// جلب احتياطي مباشر عبر HTTPS REST عند تعذر الـ SDK
+async function fetchStudyVaultViaRest() {
+  const cfg = window.INJAZ_FIREBASE_CONFIG;
+  const dbUrl = (cfg && cfg.databaseURL) || 'https://injaz-78e0d-default-rtdb.europe-west1.firebasedatabase.app';
+  const resp = await fetch(`${dbUrl}/${SV_FIREBASE_PATH}.json?nocache=${Date.now()}`, {
+    headers: { 'Accept': 'application/json' },
+    cache: 'no-store'
+  });
+  if (!resp.ok) throw new Error('HTTP ' + resp.status);
+  return await resp.json();
+}
+
 // مزامنة مبدئية مع Firebase عند بدء التشغيل
 async function initStudyVaultFirebaseSync() {
   if (typeof window === 'undefined') return;
   const cfg = window.INJAZ_FIREBASE_CONFIG;
   if (!cfg || !cfg.databaseURL) return;
 
+  let executed = false;
   const tryConnect = async () => {
-    if (!window.FirebaseSync) return;
+    if (executed) return;
+    executed = true;
+
     try {
-      window.FirebaseSync.init(cfg);
-      if (typeof window.FirebaseSync.signInAnon === 'function') {
-        await window.FirebaseSync.signInAnon().catch(() => {});
-      }
-      // فحص البيانات بالسحابة
-      const remote = await window.FirebaseSync.readOnce(SV_FIREBASE_PATH);
-      if (remote && Array.isArray(remote.subjects) && remote.subjects.length > 0) {
-        const local = getStudyVaultState();
-        if ((remote.updatedAt || 0) > (local.updatedAt || 0)) {
-          localStorage.setItem(SV_STORAGE_KEY, JSON.stringify(remote));
-          window.dispatchEvent(new Event('storage'));
-          renderSvWeeklyGoalsWidget();
+      let remote = null;
+      if (window.FirebaseSync && typeof window.FirebaseSync.readOnce === 'function') {
+        try {
+          window.FirebaseSync.init(cfg);
+          if (typeof window.FirebaseSync.signInAnon === 'function') {
+            await window.FirebaseSync.signInAnon().catch(() => {});
+          }
+          remote = await window.FirebaseSync.readOnce(SV_FIREBASE_PATH);
+        } catch (sdkErr) {
+          console.warn('FirebaseSync SDK read in bridge warning:', sdkErr);
         }
-      } else {
-        // إذا كان Firebase فارغاً، نرفع بيانات المستخدم الحالية له فوراً
-        const local = getStudyVaultState();
-        await window.FirebaseSync.write(SV_FIREBASE_PATH, local);
       }
 
-      // استماع للتحديثات الحية
-      window.FirebaseSync.listen(SV_FIREBASE_PATH, (remoteData) => {
-        if (remoteData && Array.isArray(remoteData.subjects)) {
-          const cur = getStudyVaultState();
-          if ((remoteData.updatedAt || 0) > (cur.updatedAt || 0)) {
-            localStorage.setItem(SV_STORAGE_KEY, JSON.stringify(remoteData));
+      // إذا لم يتم الجلب عبر الـ SDK نحاول عبر REST المباشر
+      if (!remote) {
+        try {
+          remote = await fetchStudyVaultViaRest();
+        } catch (restErr) {
+          console.warn('REST bridge fetch note:', restErr);
+        }
+      }
+
+      if (remote && Array.isArray(remote.subjects) && remote.subjects.length > 0) {
+        const norm = normalizeStudyVaultData(remote);
+        if (norm) {
+          const local = getStudyVaultState();
+          if ((norm.updatedAt || 0) > (local.updatedAt || 0)) {
+            localStorage.setItem(SV_STORAGE_KEY, JSON.stringify(norm));
             window.dispatchEvent(new Event('storage'));
             renderSvWeeklyGoalsWidget();
           }
         }
-      });
+      }
+
+      // استماع للتحديثات الحية إذا كان SDK متوفراً
+      if (window.FirebaseSync && typeof window.FirebaseSync.listen === 'function') {
+        window.FirebaseSync.listen(SV_FIREBASE_PATH, (remoteData) => {
+          if (remoteData && Array.isArray(remoteData.subjects)) {
+            const norm = normalizeStudyVaultData(remoteData);
+            if (norm) {
+              const cur = getStudyVaultState();
+              if ((norm.updatedAt || 0) > (cur.updatedAt || 0)) {
+                localStorage.setItem(SV_STORAGE_KEY, JSON.stringify(norm));
+                window.dispatchEvent(new Event('storage'));
+                renderSvWeeklyGoalsWidget();
+              }
+            }
+          }
+        });
+      }
     } catch (e) {
       console.warn('StudyVault Firebase sync initialization note:', e);
     }
@@ -220,6 +332,9 @@ async function initStudyVaultFirebaseSync() {
     tryConnect();
   } else {
     window.addEventListener('firebase-bridge-ready', tryConnect, { once: true });
+    setTimeout(() => {
+      tryConnect();
+    }, 1500);
   }
 }
 

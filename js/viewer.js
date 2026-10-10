@@ -16,7 +16,13 @@ const VIEWER_CAT_ORDER = ['study', 'break', 'sleep'];
 
 /* -------------------- التخزين المؤقت المحلي -------------------- */
 function loadViewerCache(){
-  try{ const raw = localStorage.getItem(VIEWER_CACHE_KEY); return raw ? JSON.parse(raw) : null; }
+  try{
+    const raw = localStorage.getItem(VIEWER_CACHE_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    const norm = normalizeCrossMidnightSessions(parsed);
+    return norm.data;
+  }
   catch(e){ return null; }
 }
 function saveViewerCache(data){
@@ -25,16 +31,25 @@ function saveViewerCache(data){
 
 function mergeWithDefaultsViewer(obj){
   const base = defaultData();
-  return {
+  const merged = {
     ...base, ...obj,
     settings: migrateGoalTiers({ ...base.settings, ...(obj.settings||{}), customTheme: { ...base.settings.customTheme, ...((obj.settings||{}).customTheme||{}) } }, obj.settings),
     days: obj.days || {},
   };
+  const norm = normalizeCrossMidnightSessions(merged);
+  return norm.data;
 }
 
 function currentDay(){
-  if(!VDATA) return { study: [], breaks: [], achievements: [] };
-  return VDATA.days[todayKey()] || { study: [], breaks: [], achievements: [] };
+  if(!VDATA) return { study: [], breaks: [], sleep: [], achievements: [] };
+  const d = VDATA.days[todayKey()];
+  if(!d) return { study: [], breaks: [], sleep: [], achievements: [] };
+  return {
+    study: Array.isArray(d.study) ? d.study : [],
+    breaks: Array.isArray(d.breaks) ? d.breaks : [],
+    sleep: Array.isArray(d.sleep) ? d.sleep : [],
+    achievements: Array.isArray(d.achievements) ? d.achievements : []
+  };
 }
 
 /* -------------------- جلب البيانات -------------------- */
@@ -238,16 +253,6 @@ function renderViewerSessions(catKey){
   } else if(catKey === 'sleep'){
     const slpSt = getSleepRatingStatus(totalMin, true, studentName);
     if(slpSt.active && slpSt.text) totalHtml += ` <span class="stat-status-badge ${slpSt.badgeClass}">${slpSt.text}</span>`;
-    if(isDay && totalMin === 0 && VDATA && VDATA.days){
-      const prevDate = new Date(todayKey() + 'T12:00:00');
-      prevDate.setDate(prevDate.getDate() - 1);
-      const prevKey = todayKey(prevDate);
-      const prevDay = VDATA.days[prevKey];
-      const overnight = (prevDay && prevDay.sleep || []).find(s => s && s.end && new Date(s.end).getTime() > new Date(todayKey() + 'T00:00:00').getTime());
-      if(overnight){
-        totalHtml += ` <div style="font-size:0.75rem;margin-top:4px;color:var(--text-muted);font-weight:normal;">🌙 نوم ليلة البارحة: <b>${formatDuration(overnight.minutes)}</b> (مسجل في ليلة ${formatDayLabel(prevKey)})</div>`;
-      }
-    }
   }
   if(totalEl) totalEl.innerHTML = totalHtml;
   const listEl = document.getElementById(`sessionlist-${catKey}`);

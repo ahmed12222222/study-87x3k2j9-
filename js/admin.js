@@ -237,12 +237,14 @@ async function checkRemoteOnLoad(){
 
 function mergeWithDefaults(obj){
   const base = defaultData();
-  return {
+  const merged = {
     ...base, ...obj,
     settings: migrateGoalTiers({ ...base.settings, ...(obj.settings||{}), customTheme: { ...base.settings.customTheme, ...((obj.settings||{}).customTheme||{}) } }, obj.settings),
     days: obj.days || {},
     review: { subjects: (obj.review && obj.review.subjects) || [], items: (obj.review && obj.review.items) || [] },
   };
+  const norm = normalizeCrossMidnightSessions(merged);
+  return norm.data;
 }
 
 function renderSyncStatusUI(){
@@ -576,8 +578,10 @@ function stopTimer(catKey){
     });
 
     DATA.activeTimer = null;
+    currentDayKey = endDay;
     persistImmediate();
     stopTickInterval();
+    renderDayNav();
     renderAll();
 
     const p1 = parts[0];
@@ -586,10 +590,6 @@ function stopTimer(catKey){
       ? `صح النوم! تم تقسيم نومك (${formatDuration(totalMinutes)}): ${formatDuration(p1.session.minutes)} في ليلة ${formatDayLabel(startDay)}، و${formatDuration(p2.session.minutes)} في سجل اليوم ${formatDayLabel(endDay)} 🌙✨`
       : `تم إنهاء ${cat.label} (${formatDuration(totalMinutes)}) وتقسيمها: ${formatDuration(p1.session.minutes)} لليوم السابق و${formatDuration(p2.session.minutes)} لليوم الحالي ✓`;
     toast(msg, 'success');
-
-    // فتح نافذة تفاصيل الجزء الأحدث (اليوم) مع إمكانية تعديلها
-    const lastPart = createdIds[createdIds.length - 1];
-    if(lastPart) openDetailsModal(catKey, lastPart.id, lastPart.dayKey);
     return;
   }
 
@@ -1084,16 +1084,6 @@ function renderTrackerSection(catKey){
   } else if(catKey === 'sleep'){
     const slpSt = getSleepRatingStatus(totalMin);
     if(slpSt.active && slpSt.text) totalHtml += ` <span class="stat-status-badge ${slpSt.badgeClass}">${slpSt.text}</span>`;
-    if(isDay && totalMin === 0 && DATA.days){
-      const prevDate = new Date(currentDayKey + 'T12:00:00');
-      prevDate.setDate(prevDate.getDate() - 1);
-      const prevKey = todayKey(prevDate);
-      const prevDay = DATA.days[prevKey];
-      const overnight = (prevDay && prevDay.sleep || []).find(s => s && s.end && new Date(s.end).getTime() > new Date(currentDayKey + 'T00:00:00').getTime());
-      if(overnight){
-        totalHtml += ` <div style="font-size:0.75rem;margin-top:4px;color:var(--text-muted);font-weight:normal;">🌙 نوم ليلة البارحة: <b>${formatDuration(overnight.minutes)}</b> (مسجل في <a href="javascript:void(0)" onclick="currentDayKey='${prevKey}';renderDayNav();renderAll();" style="color:var(--primary);text-decoration:underline;">ليلة ${formatDayLabel(prevKey)}</a>)</div>`;
-      }
-    }
   }
   if(totalEl) totalEl.innerHTML = totalHtml;
 
@@ -1191,11 +1181,17 @@ function openDetailsModal(catKey, sessionId, dayKey){
 
   const dayInfoEl = document.getElementById('modal-details-day-info');
   if(dayInfoEl){
+    let splitNote = '';
+    if(session.splitPart === 'before_midnight'){
+      splitNote = `<span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-top:2px;">🌙 جزء ما قبل منتصف الليل (حتى 12:00 ليلاً)</span>`;
+    } else if(session.splitPart === 'after_midnight'){
+      splitNote = `<span style="display:block;font-size:0.75rem;color:var(--text-muted);margin-top:2px;">☀️ جزء ما بعد منتصف الليل (من 12:00 ليلاً حتى الاستيقاظ)</span>`;
+    }
     const sStartDay = todayKey(new Date(session.start));
     const sEndDay = session.end ? todayKey(new Date(session.end)) : sStartDay;
     const isMultiDay = sStartDay !== sEndDay;
     const altDayKey = (dayKey === sStartDay && isMultiDay) ? sEndDay : (dayKey === sEndDay && isMultiDay) ? sStartDay : null;
-    let html = `<span>📅 مسجلة في: <b>${formatDayLabel(dayKey)}</b>${isMultiDay ? ' (تمتد لليوم التالي 🌙)' : ''}</span>`;
+    let html = `<div><span>📅 مسجلة في: <b>${formatDayLabel(dayKey)}</b></span>${splitNote}</div>`;
     if(altDayKey){
       html += `<button type="button" class="btn btn-secondary btn-sm" onclick="moveCurrentSessionToDay('${altDayKey}')" style="font-size:0.78rem;padding:4px 8px;">نقل إلى ${formatDayLabel(altDayKey)}</button>`;
     }
@@ -1247,9 +1243,10 @@ function saveDetailsModal(){
     if(newEnd <= newStart) newEnd = new Date(newEnd.getTime() + 24*60*60*1000); // يمتد لليوم الجاي (مثلاً نوم بالليل)
     session.start = newStart.toISOString();
     session.end = newEnd.toISOString();
-    session.minutes = Math.round((newEnd - newStart) / 60000);
+    session.minutes = Math.max(1, Math.round((newEnd - newStart) / 60000));
   }
   session.details = notes.trim();
+  normalizeCrossMidnightSessions(DATA);
   persist();
   renderAll();
   closeModal('modal-details');
@@ -2130,7 +2127,7 @@ function showInAppInactivityToast(title, body, level, milestoneMins){
   }, dur);
 }
 
-function triggerInactivityNotification(title, body, level, milestoneMins){
+async function triggerInactivityNotification(title, body, level, milestoneMins){
   if(milestoneMins === 120){
     show2HourPhoneCallAlert(body);
   } else {
@@ -2141,25 +2138,101 @@ function triggerInactivityNotification(title, body, level, milestoneMins){
       showInAppInactivityToast(title, body, level, milestoneMins);
     }
   }
+
+  // إعدادات إشعار النظام للهواتف والحواسيب
+  const notifOptions = {
+    body: body,
+    icon: '/icon-192.png',
+    badge: '/favicon-32.png',
+    tag: 'injaz-inactivity-' + milestoneMins,
+    renotify: true,
+    requireInteraction: (level === 'severe' || level === 'high' || milestoneMins === 120),
+    vibrate: [300, 150, 300, 150, 300],
+    data: {
+      url: '/admin.html',
+      milestone: milestoneMins,
+      timestamp: Date.now()
+    }
+  };
+
   if('Notification' in window && Notification.permission === 'granted'){
-    try {
-      const notif = new Notification(title, {
-        body: body,
-        icon: 'favicon-32.png',
-        badge: 'favicon-32.png',
-        tag: 'injaz-inactivity-' + milestoneMins,
-        requireInteraction: (level === 'severe' || level === 'high' || milestoneMins === 120)
-      });
-      notif.onclick = () => {
-        window.focus();
-        notif.close();
-      };
-    } catch(e) {}
+    let displayedViaSW = false;
+
+    // 1. إطلاق الإشعار عبر Service Worker (إلزامي لمتصفح Chrome على Android للظهور خارج التبويب)
+    if('serviceWorker' in navigator){
+      try {
+        const reg = await navigator.serviceWorker.ready;
+        if(reg && typeof reg.showNotification === 'function'){
+          await reg.showNotification(title, notifOptions);
+          displayedViaSW = true;
+        }
+      } catch(swErr) {
+        console.warn('SW showNotification warning:', swErr);
+      }
+
+      if(!displayedViaSW && navigator.serviceWorker.controller){
+        navigator.serviceWorker.controller.postMessage({
+          type: 'SHOW_NOTIFICATION',
+          title: title,
+          options: notifOptions
+        });
+        displayedViaSW = true;
+      }
+    }
+
+    // 2. بديل لمتصفحات سطح المكتب التقليدية
+    if(!displayedViaSW){
+      try {
+        const notif = new Notification(title, notifOptions);
+        notif.onclick = () => {
+          window.focus();
+          notif.close();
+        };
+      } catch(e) {
+        console.warn('Notification constructor note (handled via Service Worker on mobile):', e);
+      }
+    }
   }
 }
 
+function scheduleBackgroundInactivityAlarms(currentInactivityMins){
+  if(!('serviceWorker' in navigator) || !navigator.serviceWorker.controller) return;
+  if(!('Notification' in window) || Notification.permission !== 'granted') return;
+
+  const milestones = [30, 60, 90, 120];
+  milestones.forEach(m => {
+    if(m > currentInactivityMins){
+      const remainingMinutes = m - currentInactivityMins;
+      const delayMs = remainingMinutes * 60 * 1000;
+      let title = m === 30 ? '☕ تذكير: مرّت نصف ساعة استراحة'
+                : m === 60 ? '⚠️ تنبيه: مرّت ساعة كاملة بدون دراسة!'
+                : m === 90 ? '🚨 تحذير جاد: مضت ساعة ونصف من الانقطاع!'
+                : '📞 مكالمة تنبيه: ساعتان كاملتان استراحة بلا دراسة!';
+      let body = m === 30 ? 'صارلك 30 دقيقة ما تقره. استراحة كافية لتجديد النشاط، هل نعود لمواصلة الدراسة؟ 📚'
+               : m === 60 ? 'صارلك 60 دقيقة منقطع عن المذاكرة! لا تدع الوقت يمر دون إنجاز، حان وقت استئناف الجلسة الآن 📚'
+               : m === 90 ? 'مضت 90 دقيقة كاملة بلا دراسة! حافظ على عزمك وادخل جلسة التركيز الآن قبل فوات اليوم!'
+               : 'صارلك ساعتين ما تقره (120 دقيقة)! رنين مكالمة تنبيهية قوية لحفظ وقتك — افتح الكتاب وابدأ فوراً! 📚';
+
+      navigator.serviceWorker.controller.postMessage({
+        type: 'SCHEDULE_INACTIVITY_REMINDER',
+        id: 'inactivity-' + m,
+        delayMs: delayMs,
+        title: title,
+        options: {
+          body: body,
+          tag: 'injaz-inactivity-' + m,
+          renotify: true,
+          requireInteraction: (m >= 60),
+          vibrate: [300, 150, 300, 150, 300],
+          data: { url: '/admin.html', milestone: m }
+        }
+      });
+    }
+  });
+}
+
 function checkInactivityAlerts(){
-  // 1. إذا كان يدرس حالياً -> تصفير الانقطاع فوراً
+  // 1. إذا كان يدرس حالياً -> تصفير الانقطاع فوراً وإلغاء تنبيهات الخلفية
   if(DATA.activeTimer && DATA.activeTimer.category === 'study'){
     lastStudyActivityTimestamp = Date.now();
     inactivityMilestonesTriggered = {};
@@ -2167,6 +2240,10 @@ function checkInactivityAlerts(){
     if(notifDot) notifDot.classList.remove('alerting');
     const toastEl = document.getElementById('inactivity-live-toast');
     if(toastEl) toastEl.remove();
+
+    if('serviceWorker' in navigator && navigator.serviceWorker.controller){
+      navigator.serviceWorker.controller.postMessage({ type: 'CLEAR_INACTIVITY_REMINDERS' });
+    }
     return;
   }
 
@@ -2184,6 +2261,9 @@ function checkInactivityAlerts(){
       inactivityMinutes = Math.max(0, Math.floor((Date.now() - lastStudyActivityTimestamp) / 60000));
     }
   }
+
+  // جدولة تنبيهات الخلفية في الـ Service Worker لتعمل في حال تم تصغير أو مغادرة المتصفح
+  scheduleBackgroundInactivityAlarms(inactivityMinutes);
 
   // 3. تحديث شارة الجرس في التوب بار
   const notifDot = document.getElementById('notif-badge-dot');
@@ -2273,8 +2353,8 @@ function updateNotifPermUI(){
 
   const perm = Notification.permission;
   if(perm === 'granted'){
-    if(statusTitle) statusTitle.textContent = 'إشعارات المتصفح: مفعّلة بنجاح ✓';
-    if(statusDesc) statusDesc.textContent = 'تصلك تنبيهات حية فورية على سطح المكتب أو شاشة الهاتف عند الانقطاع.';
+    if(statusTitle) statusTitle.textContent = 'إشعارات النظام والهاتف: مفعّلة بنجاح ✓';
+    if(statusDesc) statusDesc.textContent = 'تصلك تنبيهات حية فورية على شاشة الهاتف وشريط الإشعارات العلوي عبر Service Worker حتى خارج المتصفح.';
     if(permIcon) permIcon.textContent = '✅';
     if(btnReq){
       btnReq.className = 'btn btn-secondary btn-sm';
@@ -2290,7 +2370,7 @@ function updateNotifPermUI(){
     }
   } else {
     if(statusTitle) statusTitle.textContent = 'إشعارات المتصفح: بانتظار الإذن';
-    if(statusDesc) statusDesc.textContent = 'اضغط تفعيل لمنح المتصفح الإذن بإرسال تنبيهات التذكير عند الانقطاع.';
+    if(statusDesc) statusDesc.textContent = 'اضغط تفعيل لمنح المتصفح الإذن بإرسال تنبيهات التذكير عند الانقطاع على هاتفك.';
     if(permIcon) permIcon.textContent = '🔔';
     if(btnReq){
       btnReq.className = 'btn btn-primary btn-sm';
@@ -2306,10 +2386,18 @@ async function requestNotificationPermission(){
     return;
   }
   try {
+    if('serviceWorker' in navigator){
+      try {
+        await navigator.serviceWorker.register('/sw.js');
+        await navigator.serviceWorker.ready;
+      } catch(swErr) {
+        console.warn('SW register notice:', swErr);
+      }
+    }
     const res = await Notification.requestPermission();
     updateNotifPermUI();
     if(res === 'granted'){
-      toast('تم تفعيل إشعارات المتصفح بنجاح! سيتم تنبيهك عند الانقطاع ✓', 'success');
+      toast('تم تفعيل إشعارات المتصفح والنظام بنجاح! ستصلك التنبيهات على الهاتف ✓', 'success');
       testInactivityNotification();
     } else if(res === 'denied'){
       toast('تم رفض إذن الإشعارات من إعدادات المتصفح', 'error');
@@ -2322,11 +2410,11 @@ async function requestNotificationPermission(){
 function testInactivityNotification(){
   triggerInactivityNotification(
     '🔔 تجربة إشعار الانقطاع',
-    'هذا إشعار تجريبي لاختبار الصوت والتنبيهات. سيعمل التنبيه تلقائياً بعد نصف ساعة وساعة وساعتين من الانقطاع!',
+    'هذا إشعار تجريبي لاختبار ظهور تنبيه الهاتف والصوت. سيعمل التنبيه تلقائياً عند انقطاعك عن الدراسة!',
     'warning',
     60
   );
-  toast('تم إرسال إشعار تجريبي بنجاح! تفحص شاشتك والصوت ✓', 'success');
+  toast('تم إرسال إشعار تجريبي بنجاح! تفحص لوحة إشعارات الهاتف والصوت ✓', 'success');
 }
 
 function toggleNotifSound(enabled){
@@ -2352,6 +2440,12 @@ window.dismissRatioWarningForNow = dismissRatioWarningForNow;
 
 /* -------------------- الإقلاع -------------------- */
 function init(){
+  const norm = normalizeCrossMidnightSessions(DATA);
+  if(norm.changed){
+    DATA = norm.data;
+    saveData(DATA);
+    persistImmediate();
+  }
   hydrateIcons();
   applyTheme(DATA.settings);
   renderBrandName();
@@ -2781,7 +2875,8 @@ function importFullBackupFile(input) {
       
       // Reload main DATA object
       if (typeof defaultData === 'function') {
-         DATA = parsed.data.injaz || defaultData();
+         DATA = mergeWithDefaults(parsed.data.injaz);
+         saveData(DATA);
          applyTheme(DATA.settings);
          renderAll();
          renderBrandName();
