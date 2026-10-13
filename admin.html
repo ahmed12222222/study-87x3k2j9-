@@ -15,9 +15,9 @@
 <link rel="icon" type="image/x-icon" href="favicon.ico">
 <link rel="shortcut icon" href="favicon.ico">
 <link rel="icon" type="image/svg+xml" href="icon.svg">
-<link rel="manifest" href="manifest.json">
-<meta name="application-name" content="إنجاز">
-<meta name="apple-mobile-web-app-title" content="إنجاز">
+<link rel="manifest" href="admin-manifest.json">
+<meta name="application-name" content="إنجاز تحكم">
+<meta name="apple-mobile-web-app-title" content="إنجاز تحكم">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -78,11 +78,10 @@
           <span class="visitor-pulse-dot" aria-hidden="true"></span>
           <span id="visitors-count-text">الزوار: --</span>
         </button>
-      </div>
       <div class="topbar-actions">
-        <button type="button" class="pwa-install-trigger" onclick="window.triggerPWAInstall()" title="تثبيت تطبيق إنجاز على هاتفك">
+        <button type="button" class="pwa-install-trigger admin-pwa-btn" onclick="window.triggerPWAInstall()" title="تثبيت لوحة تحكم الأدمن كتطبيق مستقل على هاتفك">
           <span data-icon="sparkle"></span>
-          <span>تثبيت التطبيق</span>
+          <span>تثبيت تطبيق الأدمن 📱</span>
         </button>
         <a href="studyvault.html" class="btn-icon" title="StudyVault — متتبع الدراسة" aria-label="StudyVault"><span data-icon="book"></span></a>
         <a href="review.html" class="btn-icon" title="المراجعات والامتحانات" aria-label="المراجعات والامتحانات"><span data-icon="target"></span></a>
@@ -1112,10 +1111,5 @@
 <script src="js/studyvault-bridge.js"></script>
 <script src="js/admin.js"></script>
 <script src="js/pwa-install.js"></script>
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => { navigator.serviceWorker.register(new URL(sw.js, window.location.href).href, { scope: ./ }).catch(() => {}); });
-}
-</script>
 </body>
 </html>

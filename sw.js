@@ -1,5 +1,5 @@
 // sw.js — Service Worker لتشغيل تطبيق "إنجاز" بصورة مستقلة PWA وإدارة إشعارات النظام
-const CACHE_NAME = 'injaz-pwa-v10';
+const CACHE_NAME = 'injaz-pwa-v11';
 
 const STATIC_ASSETS = [
   './',
@@ -20,6 +20,7 @@ const STATIC_ASSETS = [
   'js/studyvault-bridge.js',
   'js/pwa-install.js',
   'manifest.json',
+  'admin-manifest.json',
   'icon-192.png',
   'icon-maskable-192.png',
   'icon-512.png',

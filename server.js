@@ -125,6 +125,13 @@ app.get(['/manifest.json', '/public/manifest.json'], (req, res) => {
   res.sendFile(path.join(__dirname, 'manifest.json'));
 });
 
+app.get(['/admin-manifest.json', '/public/admin-manifest.json'], (req, res) => {
+  res.setHeader('Content-Type', 'application/manifest+json; charset=UTF-8');
+  res.setHeader('Cache-Control', 'public, max-age=3600');
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.sendFile(path.join(__dirname, 'admin-manifest.json'));
+});
+
 // Explicit icon routes for mobile launchers & shortcuts with solid CORS headers
 const serveIcon = (filePath, contentType = 'image/png') => (req, res) => {
   res.setHeader('Content-Type', contentType);

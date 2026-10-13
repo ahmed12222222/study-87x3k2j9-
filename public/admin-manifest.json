@@ -1,0 +1,82 @@
+{
+  "id": "injaz-admin-pwa",
+  "name": "إنجاز — لوحة تحكم المسؤول",
+  "short_name": "إنجاز تحكم",
+  "description": "لوحة تحكم وإدارة جلسات الدراسة والمتابعة والإنجازات اليومية لتطبيق إنجاز",
+  "start_url": "admin.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0d0e15",
+  "theme_color": "#0d0e15",
+  "lang": "ar",
+  "dir": "rtl",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "لوحة التحكم",
+      "short_name": "التحكم",
+      "description": "فتح لوحة تحكم وإدارة الدراسة مباشرة",
+      "url": "admin.html",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "متتبع الدراسة StudyVault",
+      "short_name": "StudyVault",
+      "description": "سجل وجلسات المواد الدراسية",
+      "url": "studyvault.html",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "المراجعات والامتحانات",
+      "short_name": "المراجعات",
+      "description": "جدول المراجعات الدورية",
+      "url": "review.html",
+      "icons": [
+        {
+          "src": "icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
+    }
+  ]
+}

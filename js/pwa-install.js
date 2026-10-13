@@ -1,5 +1,6 @@
 /**
  * إنجاز — وحدة التثبيت الأصيل PWA وتنبيهات النظام
+ * مخصصة حصرياً للمشرف/الأدمن (لوحة التحكم) مع حجب أزرار التثبيت عن صفحات المتابعين والأهل
  * متوافقة مع جميع المتصفحات، استضافة GitHub Pages، وبيئات التشغيل المختلفة
  */
 (function() {
@@ -9,6 +10,13 @@
   let isInstalled = false;
   const isIOS = /iphone|ipad|ipod/.test(navigator.userAgent.toLowerCase());
   const isAndroid = /android/.test(navigator.userAgent.toLowerCase());
+
+  // التحقق مما إذا كانت الصفحة الحالية هي صفحة الأدمن فقط
+  function isAdminPage() {
+    const path = window.location.pathname.toLowerCase();
+    const href = window.location.href.toLowerCase();
+    return path.endsWith('admin.html') || href.includes('admin.html');
+  }
 
   // التحقق من تشغيل التطبيق حالياً كتطبيق مستقل (Standalone PWA)
   function checkStandalone() {
@@ -20,23 +28,23 @@
 
   isInstalled = checkStandalone();
 
-  // إنشاء أو تحديث عناصر واجهة التثبيت
+  // إنشاء أو تحديث عناصر واجهة التثبيت (تظهر فقط وحصرياً في صفحة الأدمن)
   function updateInstallUI() {
-    if (isInstalled) {
-      // إخفاء أي أزرار أو بانرات تثبيت إذا كان التطبيق مثبتاً ويعمل كـ PWA
+    // إذا لم نكن في صفحة الأدمن، أو إذا كان التطبيق مثبتاً بالفعل كـ PWA
+    if (!isAdminPage() || isInstalled) {
       document.querySelectorAll('.pwa-install-trigger').forEach(el => el.style.display = 'none');
-      const banner = document.getElementById('pwa-install-toast');
-      if (banner) banner.remove();
+      const floating = document.getElementById('pwa-floating-bar');
+      if (floating) floating.remove();
       return;
     }
 
-    // إظهار أزرار التثبيت المدمجة في الواجهة
+    // إظهار أزرار التثبيت المدمجة في لوحة تحكم الأدمن
     document.querySelectorAll('.pwa-install-trigger').forEach(el => {
       el.style.display = 'inline-flex';
     });
   }
 
-  // معالجة حدث التثبيت عند النقر
+  // معالجة حدث التثبيت عند النقر على زر تثبيت الأدمن
   window.triggerPWAInstall = async function() {
     if (deferredPrompt) {
       try {
@@ -45,7 +53,7 @@
         if (choice.outcome === 'accepted') {
           isInstalled = true;
           updateInstallUI();
-          showPWAFeedback('جاري تثبيت تطبيق إنجاز على هاتفك...', 'success');
+          showPWAFeedback('جاري تثبيت تطبيق الأدمن على هاتفك...', 'success');
         }
         deferredPrompt = null;
         return;
@@ -58,7 +66,7 @@
     showInstallGuideModal();
   };
 
-  // إظهار نافذة إرشادية أنيقة وواضحة جداً للمستخدم
+  // إظهار نافذة إرشادية أنيقة ومخصصة للوحة تحكم الأدمن
   function showInstallGuideModal() {
     const existing = document.getElementById('pwa-guide-modal');
     if (existing) existing.remove();
@@ -80,14 +88,14 @@
         </div>
         <div class="pwa-step-item">
           <div class="pwa-step-num">3</div>
-          <div class="pwa-step-text">اضغط <strong>إضافة</strong> ليظهر تطبيق إنجاز بأيقونته الرسمية الذهبية فوراً.</div>
+          <div class="pwa-step-text">اضغط <strong>إضافة</strong> ليظهر تطبيق لوحة تحكم الأدمن بأيقونته الرسمية فوراً وباسم <strong>إنجاز تحكم</strong>.</div>
         </div>
       `;
     } else {
       instructionsHtml = `
         <div class="pwa-step-item">
           <div class="pwa-step-num">1</div>
-          <div class="pwa-step-text">اضغط على زر <strong>القائمة (⋮)</strong> أعلى يمين أو يسار متصفح كروم.</div>
+          <div class="pwa-step-text">اضغط على زر <strong>القائمة (⋮)</strong> أعلى متصفح كروم.</div>
         </div>
         <div class="pwa-step-item">
           <div class="pwa-step-num">2</div>
@@ -95,7 +103,7 @@
         </div>
         <div class="pwa-step-item">
           <div class="pwa-step-num">3</div>
-          <div class="pwa-step-text">سيتثبت التطبيق فوراً بشعاره الرسمي الكامل دون أي نقص.</div>
+          <div class="pwa-step-text">سيتثبت تطبيق الأدمن بشعاره الكامل ليفتح لوحة التحكم مباشرة من سطح المكتب.</div>
         </div>
       `;
     }
@@ -106,8 +114,8 @@
           <div class="pwa-app-badge">
             <img src="icon-192.png" alt="شعار إنجاز" class="pwa-modal-logo" onerror="this.src='favicon-32.png'">
             <div>
-              <h3 class="pwa-modal-title">تثبيت تطبيق إنجاز</h3>
-              <p class="pwa-modal-sub">تطبيق مستقل سريع، بدون أشرطة متصفح، مع إشعارات فورية</p>
+              <h3 class="pwa-modal-title">تثبيت تطبيق الأدمن (لوحة التحكم) 📱</h3>
+              <p class="pwa-modal-sub">تطبيق مستقل مخصص للمشرف فقط، بدون أشرطة متصفح مع فتح لوحة الإدارة فوراً</p>
             </div>
           </div>
           <button type="button" class="pwa-close-btn" onclick="document.getElementById('pwa-guide-modal').remove()">&times;</button>
@@ -138,13 +146,15 @@
     deferredPrompt = e;
     updateInstallUI();
 
-    // إظهار بطاقة تثبيت خفيفة إذا لم يثبت بعد ولم يغلقها المستخدم مؤخراً
-    try {
-      const dismissed = sessionStorage.getItem('injaz_install_toast_dismissed');
-      if (!dismissed && !isInstalled) {
-        showFloatingInstallPrompt();
-      }
-    } catch (_) {}
+    // إظهار بطاقة تثبيت خفيفة حصرياً داخل صفحة الأدمن إذا لم يُثبت بعد ولم يغلقها المستخدم مؤخراً
+    if (isAdminPage()) {
+      try {
+        const dismissed = sessionStorage.getItem('injaz_admin_install_dismissed');
+        if (!dismissed && !isInstalled) {
+          showFloatingInstallPrompt();
+        }
+      } catch (_) {}
+    }
   });
 
   // حدث اكتمال التثبيت
@@ -154,11 +164,12 @@
     updateInstallUI();
     const floating = document.getElementById('pwa-floating-bar');
     if (floating) floating.remove();
-    showPWAFeedback('تم تثبيت تطبيق إنجاز بنجاح! تجده الآن في شاشة هاتفك الرئيسية 🎉', 'success');
+    showPWAFeedback('تم تثبيت تطبيق لوحة تحكم الأدمن بنجاح! 🎉', 'success');
   });
 
-  // بطاقة تثبيت سريعة عائمة أسفل الشاشة
+  // بطاقة تثبيت سريعة عائمة أسفل الشاشة — تظهر فقط في صفحة الأدمن
   function showFloatingInstallPrompt() {
+    if (!isAdminPage()) return;
     if (document.getElementById('pwa-floating-bar') || isInstalled) return;
 
     const bar = document.createElement('div');
@@ -166,14 +177,14 @@
     bar.className = 'pwa-floating-bar';
     bar.innerHTML = `
       <div class="pwa-bar-content">
-        <img src="icon-192.png" class="pwa-bar-icon" alt="إنجاز" onerror="this.src='favicon-32.png'">
+        <img src="icon-192.png" class="pwa-bar-icon" alt="إنجاز تحكم" onerror="this.src='favicon-32.png'">
         <div class="pwa-bar-text">
-          <strong>تثبيت إنجاز على هاتفك</strong>
-          <span>لوصول أسرع وإشعارات دراسية مستمرة</span>
+          <strong>تثبيت تطبيق الأدمن 📱</strong>
+          <span>لوحة التحكم والإدارة المستقلة على شاشة هاتفك</span>
         </div>
       </div>
       <div class="pwa-bar-actions">
-        <button type="button" class="pwa-bar-btn-install" onclick="window.triggerPWAInstall()">تثبيت</button>
+        <button type="button" class="pwa-bar-btn-install" onclick="window.triggerPWAInstall()">تثبيت الأدمن</button>
         <button type="button" class="pwa-bar-btn-close" onclick="dismissInstallPrompt()">&times;</button>
       </div>
     `;
@@ -184,7 +195,7 @@
     const el = document.getElementById('pwa-floating-bar');
     if (el) el.remove();
     try {
-      sessionStorage.setItem('injaz_install_toast_dismissed', 'true');
+      sessionStorage.setItem('injaz_admin_install_dismissed', 'true');
     } catch (_) {}
   };
 
@@ -195,23 +206,25 @@
     style.id = 'pwa-install-styles';
     style.textContent = `
       .pwa-install-trigger {
-        display: inline-flex;
+        display: none;
         align-items: center;
         gap: 6px;
-        background: linear-gradient(135deg, rgba(234, 179, 8, 0.18), rgba(245, 158, 11, 0.28));
+        background: linear-gradient(135deg, rgba(234, 179, 8, 0.22), rgba(245, 158, 11, 0.35));
         color: #fef08a;
-        border: 1px solid rgba(234, 179, 8, 0.45);
-        padding: 5px 12px;
+        border: 1px solid rgba(234, 179, 8, 0.55);
+        padding: 5px 14px;
         border-radius: 999px;
-        font-size: 0.78rem;
+        font-size: 0.8rem;
         font-weight: 700;
         cursor: pointer;
         transition: all 0.2s ease;
+        box-shadow: 0 0 12px rgba(234, 179, 8, 0.2);
       }
       .pwa-install-trigger:hover {
-        background: linear-gradient(135deg, rgba(234, 179, 8, 0.3), rgba(245, 158, 11, 0.45));
+        background: linear-gradient(135deg, rgba(234, 179, 8, 0.35), rgba(245, 158, 11, 0.5));
         border-color: #fef08a;
         transform: translateY(-1px);
+        box-shadow: 0 0 18px rgba(234, 179, 8, 0.35);
       }
       .pwa-floating-bar {
         position: fixed;
@@ -223,9 +236,9 @@
         background: rgba(18, 20, 29, 0.96);
         backdrop-filter: blur(16px);
         -webkit-backdrop-filter: blur(16px);
-        border: 1px solid rgba(234, 179, 8, 0.35);
+        border: 1px solid rgba(234, 179, 8, 0.45);
         border-radius: 16px;
-        box-shadow: 0 12px 36px rgba(0,0,0,0.55), 0 0 20px rgba(234, 179, 8, 0.15);
+        box-shadow: 0 12px 36px rgba(0,0,0,0.55), 0 0 20px rgba(234, 179, 8, 0.2);
         padding: 10px 14px;
         display: flex;
         align-items: center;
@@ -248,23 +261,26 @@
       .pwa-bar-icon {
         width: 38px;
         height: 38px;
-        border-radius: 10px;
-        box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        border-radius: 9px;
         flex-shrink: 0;
+        border: 1px solid rgba(234, 179, 8, 0.3);
       }
       .pwa-bar-text {
         display: flex;
         flex-direction: column;
-        line-height: 1.25;
         min-width: 0;
       }
       .pwa-bar-text strong {
-        font-size: 0.85rem;
-        color: #f8fafc;
+        color: #fef08a;
+        font-size: 0.84rem;
+        font-weight: 700;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
       }
       .pwa-bar-text span {
-        font-size: 0.72rem;
         color: #94a3b8;
+        font-size: 0.72rem;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -272,7 +288,7 @@
       .pwa-bar-actions {
         display: flex;
         align-items: center;
-        gap: 8px;
+        gap: 6px;
         flex-shrink: 0;
       }
       .pwa-bar-btn-install {
@@ -280,23 +296,26 @@
         color: #0b0f19;
         border: none;
         padding: 6px 14px;
-        border-radius: 999px;
-        font-size: 0.82rem;
+        border-radius: 10px;
         font-weight: 800;
+        font-size: 0.78rem;
         cursor: pointer;
         transition: transform 0.15s ease;
       }
       .pwa-bar-btn-install:active {
-        transform: scale(0.95);
+        transform: scale(0.96);
       }
       .pwa-bar-btn-close {
         background: transparent;
+        color: #64748b;
         border: none;
-        color: #94a3b8;
-        font-size: 1.4rem;
+        font-size: 1.25rem;
         cursor: pointer;
-        padding: 2px 6px;
+        padding: 0 4px;
         line-height: 1;
+      }
+      .pwa-bar-btn-close:hover {
+        color: #cbd5e1;
       }
       .pwa-modal-backdrop {
         position: fixed;
@@ -317,20 +336,20 @@
         to { opacity: 1; }
       }
       .pwa-modal-box {
-        background: #141724;
+        background: #11131c;
         border: 1px solid rgba(234, 179, 8, 0.35);
         border-radius: 20px;
-        max-width: 380px;
+        max-width: 420px;
         width: 100%;
         padding: 20px;
-        box-shadow: 0 20px 50px rgba(0,0,0,0.7);
+        box-shadow: 0 20px 50px rgba(0,0,0,0.7), 0 0 30px rgba(234, 179, 8, 0.15);
       }
       .pwa-modal-header {
         display: flex;
         align-items: flex-start;
         justify-content: space-between;
         gap: 12px;
-        margin-bottom: 16px;
+        margin-bottom: 18px;
       }
       .pwa-app-badge {
         display: flex;
@@ -338,49 +357,56 @@
         gap: 12px;
       }
       .pwa-modal-logo {
-        width: 48px;
-        height: 48px;
+        width: 46px;
+        height: 46px;
         border-radius: 12px;
+        border: 1px solid rgba(234, 179, 8, 0.4);
       }
       .pwa-modal-title {
-        margin: 0;
+        color: #f8fafc;
         font-size: 1.05rem;
         font-weight: 800;
-        color: #f8fafc;
+        margin: 0 0 3px 0;
       }
       .pwa-modal-sub {
-        margin: 3px 0 0;
-        font-size: 0.74rem;
         color: #94a3b8;
-        line-height: 1.3;
+        font-size: 0.78rem;
+        margin: 0;
+        line-height: 1.35;
       }
       .pwa-close-btn {
-        background: none;
-        border: none;
+        background: transparent;
         color: #64748b;
+        border: none;
         font-size: 1.5rem;
+        line-height: 1;
         cursor: pointer;
+        padding: 0 4px;
+      }
+      .pwa-close-btn:hover {
+        color: #f1f5f9;
       }
       .pwa-modal-steps {
         display: flex;
         flex-direction: column;
         gap: 12px;
-        background: rgba(0,0,0,0.25);
-        border-radius: 12px;
-        padding: 14px;
-        margin-bottom: 16px;
+        margin-bottom: 20px;
       }
       .pwa-step-item {
         display: flex;
         align-items: flex-start;
-        gap: 10px;
+        gap: 12px;
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        border-radius: 12px;
+        padding: 10px 14px;
       }
       .pwa-step-num {
-        width: 22px;
-        height: 22px;
         background: #eab308;
         color: #0b0f19;
-        font-weight: 800;
+        font-weight: 900;
+        width: 24px;
+        height: 24px;
         border-radius: 50%;
         display: flex;
         align-items: center;
@@ -389,9 +415,12 @@
         flex-shrink: 0;
       }
       .pwa-step-text {
+        color: #e2e8f0;
         font-size: 0.82rem;
-        color: #cbd5e1;
-        line-height: 1.4;
+        line-height: 1.45;
+      }
+      .pwa-step-text strong {
+        color: #fef08a;
       }
       .pwa-modal-footer {
         display: flex;
@@ -439,7 +468,6 @@
       const swUrl = new URL('sw.js', window.location.href).href;
       navigator.serviceWorker.register(swUrl, { scope: './' })
         .then((reg) => {
-          // تحديث دوري للـ Service Worker إذا وجد إصدار جديد
           reg.update().catch(() => {});
         })
         .catch((err) => {

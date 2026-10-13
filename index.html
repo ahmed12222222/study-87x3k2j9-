@@ -60,10 +60,6 @@
     </div>
     <div class="topbar-meta">
       <div class="topbar-actions">
-        <button type="button" class="pwa-install-trigger" onclick="window.triggerPWAInstall()" title="تثبيت تطبيق إنجاز على هاتفك">
-          <span data-icon="sparkle"></span>
-          <span>تثبيت التطبيق</span>
-        </button>
         <div class="btn-icon ft-badge-btn ft-badge-static" id="ftBadgeViewer" data-ft-badge data-no-link="true" title="رتبة الأسبوع" aria-label="رتبة الأسبوع" style="cursor:default; pointer-events:none;"></div>
         <div class="theme-popover-wrap">
           <button type="button" class="btn-icon" id="theme-popover-btn" onclick="toggleThemePopover()" title="تغيير المظهر لجهازك" aria-label="تغيير المظهر"><span data-icon="palette"></span></button>
@@ -335,10 +331,5 @@
 <script src="js/rank-svgs.js"></script>
 <script src="js/focus-tracker-badge.js"></script>
 <script src="js/pwa-install.js"></script>
-<script>
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => { navigator.serviceWorker.register(new URL(sw.js, window.location.href).href, { scope: ./ }).catch(() => {}); });
-}
-</script>
 </body>
 </html>

@@ -1,6 +1,6 @@
 {
-  "summary":  "تم إنجاز كافة خطوات خطة العمل بنجاح: تحويل ملف manifest.json والـ Service Worker إلى مسارات نسبية متوافقة بالكامل مع مستودع GitHub و GitHub Pages، وتضمين الأيقونة كـ Base64 Data URI فوري داخل وسوم head لضمان ظهور اللوجو فوراً على شاشة الهاتف، وتفعيل زر ومعالج التثبيت الأصلي (PWA Install Prompt) بنقرة واحدة.",
-  "updatedAt":  "2026-10-10T11:11:17.338343261Z",
-  "requestFeedback":  true,
-  "userFacing":  true
+  "summary": "تخصيص تثبيت تطبيق إنجاز كتطبيق PWA مستقل وخاص بصفحة الأدمن (admin.html)، مع حجب أزرار وبانرات التثبيت تماماً عن صفحة المتابعة العامة (index.html) وصفحات الزوار لحماية اللوحة من الأهل، وإعداد ملف admin-manifest.json بمحدد تشغيل مستقل يفتح صفحة الأدمن مباشرة.",
+  "updatedAt": "2026-10-13T12:36:46.241967147Z",
+  "requestFeedback": true,
+  "userFacing": true
 }
