@@ -163,6 +163,23 @@ function normalizeStudyVaultData(raw) {
         }
       }
 
+      const normCompletedLectures = {};
+      if (s.completedLectures && typeof s.completedLectures === 'object' && !Array.isArray(s.completedLectures)) {
+        Object.keys(s.completedLectures).forEach(k => {
+          if (Array.isArray(s.completedLectures[k])) {
+            normCompletedLectures[String(k)] = s.completedLectures[k].map(Number).filter(n => n > 0).sort((a,b) => a - b);
+          }
+        });
+      }
+      Object.keys(normProgress).forEach(k => {
+        if (!normCompletedLectures[k] && normProgress[k] > 0) {
+          normCompletedLectures[k] = Array.from({length: normProgress[k]}, (_, i) => i + 1);
+        }
+      });
+      Object.keys(normCompletedLectures).forEach(k => {
+        normProgress[k] = normCompletedLectures[k].length;
+      });
+
       const normChapterLectures = {};
       if (s.chapterLectures) {
         if (Array.isArray(s.chapterLectures)) {
@@ -194,6 +211,7 @@ function normalizeStudyVaultData(raw) {
         color: s.color || '#7b5ef8',
         instructor: s.instructor || '',
         currentChapter: Number(s.currentChapter) || 1,
+        completedLectures: normCompletedLectures,
         lectureProgress: normProgress,
         chapterLectures: normChapterLectures,
         materials: normMaterials,
@@ -366,7 +384,18 @@ function svEndOfWeek(d) {
   return e;
 }
 
-// علامة صح في StudyVault عند إكمال المحاضرة بإنجازات اليوم
+// فحص هل المحاضرة مكتملة في StudyVault
+function svIsLectureCompleted(sub, chapterNum, lectureNum) {
+  if (!sub) return false;
+  const ch = Number(chapterNum);
+  const lec = Number(lectureNum);
+  if (sub.completedLectures && Array.isArray(sub.completedLectures[ch])) {
+    return sub.completedLectures[ch].includes(lec);
+  }
+  return lec <= Number((sub.lectureProgress && sub.lectureProgress[ch]) || 0);
+}
+
+// علامة صح في StudyVault عند إكمال المحاضرة بإنجازات اليوم (تدعم القفز الفردي بدون إكمال السابق)
 function svMarkLectureDone(subjectId, chapterNum, lectureNum) {
   const state = getStudyVaultState();
   const sub = state.subjects.find(s => s.id === subjectId || s.name === subjectId);
@@ -374,11 +403,18 @@ function svMarkLectureDone(subjectId, chapterNum, lectureNum) {
 
   const ch = Number(chapterNum);
   const lec = Number(lectureNum);
-  if (!sub.lectureProgress) sub.lectureProgress = {};
-
-  if ((sub.lectureProgress[ch] || 0) < lec) {
-    sub.lectureProgress[ch] = lec;
+  if (!sub.completedLectures) sub.completedLectures = {};
+  if (!Array.isArray(sub.completedLectures[ch])) {
+    const prevCount = (sub.lectureProgress && sub.lectureProgress[ch]) || 0;
+    sub.completedLectures[ch] = prevCount > 0 ? Array.from({length: prevCount}, (_, i) => i + 1) : [];
   }
+
+  if (!sub.completedLectures[ch].includes(lec)) {
+    sub.completedLectures[ch].push(lec);
+    sub.completedLectures[ch].sort((a, b) => a - b);
+  }
+  if (!sub.lectureProgress) sub.lectureProgress = {};
+  sub.lectureProgress[ch] = sub.completedLectures[ch].length;
 
   const today = svTodayStr();
   const exists = state.studyLog.some(en =>
@@ -413,9 +449,11 @@ function svUnmarkLectureDone(subjectId, chapterNum, lectureNum) {
     !(en.date === today && en.subjectId === sub.id && Number(en.chapterNum) === ch && Number(en.lectureNum) === lec)
   );
 
-  if (sub.lectureProgress && sub.lectureProgress[ch] === lec) {
-    sub.lectureProgress[ch] = Math.max(0, lec - 1);
+  if (sub.completedLectures && Array.isArray(sub.completedLectures[ch])) {
+    sub.completedLectures[ch] = sub.completedLectures[ch].filter(x => x !== lec);
   }
+  if (!sub.lectureProgress) sub.lectureProgress = {};
+  sub.lectureProgress[ch] = (sub.completedLectures && sub.completedLectures[ch]) ? sub.completedLectures[ch].length : 0;
 
   saveStudyVaultState(state);
   renderSvWeeklyGoalsWidget();
@@ -603,6 +641,7 @@ let svPickerPagesSubMode = 'target'; // 'target' | 'range'
 let svPickerTargetPage = 0;
 let svPickerFromPage = 1;
 let svPickerToPage = 1;
+let svPickerBasket = []; // سلة التحديد المتعدد لإضافة عدة أهداف ومحاضرات دفعة واحدة
 
 function switchSvPickerMode(mode) {
   svPickerMode = mode;
@@ -629,6 +668,7 @@ function switchSvPickerMode(mode) {
     }
   }
   renderSvPickerModalContent();
+  renderSvPickerBasket();
 }
 
 function setSvPagesSubMode(subMode) {
@@ -669,13 +709,13 @@ function openStudyVaultPicker() {
     return;
   }
 
-  // إذا ماكو مادة محددة، نحدد الأولى
   if (!svPickerSelectedSubjectId || !state.subjects.some(s => s.id === svPickerSelectedSubjectId)) {
     svPickerSelectedSubjectId = state.subjects[0].id;
     svPickerSelectedChapter = state.subjects[0].currentChapter || 1;
   }
 
   renderSvPickerModalContent();
+  renderSvPickerBasket();
 
   if (typeof showModal === 'function') {
     showModal('modal-sv-picker');
@@ -720,21 +760,22 @@ function renderSvPickerModalContent() {
     ? state.subjects 
     : (USER_STUDYVAULT_DATA && USER_STUDYVAULT_DATA.subjects) || [];
 
-  // إذا كانت المادة المحددة غير موجودة، نختار الأولى
   if (!svPickerSelectedSubjectId || !subjects.some(s => s.id === svPickerSelectedSubjectId)) {
     svPickerSelectedSubjectId = subjects[0] ? subjects[0].id : null;
   }
 
-  // 1. المواد
+  // 1. شريط المواد مع إبراز عدد العناصر المحددة لكل مادة
   subChipsContainer.innerHTML = subjects.map(s => {
     const isSel = s.id === svPickerSelectedSubjectId;
     const col = s.color || '#38d9f5';
+    const subBasketCount = svPickerBasket.filter(b => b.subjectId === s.id).length;
     return `
       <button type="button" class="sv-picker-chip ${isSel ? 'selected' : ''}" 
-        style="${isSel ? `background:${col}22;border-color:${col};color:${col}` : ''}"
+        style="${isSel ? `background:${col}22;border-color:${col};color:${col};font-weight:800;` : ''}"
         onclick="svPickerSelectSubject('${s.id}')">
         <span class="sv-picker-dot" style="background:${col}"></span>
         <span>${typeof escapeHtml === 'function' ? escapeHtml(s.name) : s.name}</span>
+        ${subBasketCount > 0 ? `<span style="background:${col};color:#000;border-radius:10px;padding:1px 6px;font-size:10px;font-weight:900;">${subBasketCount}</span>` : ''}
       </button>
     `;
   }).join('');
@@ -742,7 +783,7 @@ function renderSvPickerModalContent() {
   const currentSub = subjects.find(s => s.id === svPickerSelectedSubjectId) || subjects[0];
   if (!currentSub) return;
 
-  // 2. الفصول (لوضع المحاضرات)
+  // 2. الفصول
   const chaptersCount = Number(currentSub.chaptersCount) || 6;
   if (!svPickerSelectedChapter || svPickerSelectedChapter < 1 || svPickerSelectedChapter > chaptersCount) {
     svPickerSelectedChapter = currentSub.currentChapter || 1;
@@ -751,27 +792,38 @@ function renderSvPickerModalContent() {
   const chHtml = [];
   for (let c = 1; c <= chaptersCount; c++) {
     const isSel = c === svPickerSelectedChapter;
-    const lecDone = (currentSub.lectureProgress && currentSub.lectureProgress[c]) || 0;
+    const doneList = (currentSub.completedLectures && Array.isArray(currentSub.completedLectures[c]))
+      ? currentSub.completedLectures[c]
+      : (currentSub.lectureProgress && currentSub.lectureProgress[c]
+          ? Array.from({length: currentSub.lectureProgress[c]}, (_, i) => i + 1)
+          : []);
+    const lecDone = doneList.length;
     const totalLec = (currentSub.chapterLectures && currentSub.chapterLectures[c]) || currentSub.lecPerCh || 8;
     const col = currentSub.color || '#38d9f5';
+    const chBasketCount = svPickerBasket.filter(b => b.type === 'lecture' && b.subjectId === currentSub.id && Number(b.chapter) === c).length;
+
     chHtml.push(`
       <button type="button" class="sv-picker-chip ${isSel ? 'selected' : ''}"
-        style="${isSel ? `background:${col}22;border-color:${col};color:${col}` : ''}"
+        style="${isSel ? `background:${col}22;border-color:${col};color:${col};font-weight:800;` : ''}"
         onclick="svPickerSelectChapter(${c})">
         <span>فصل ${c}</span>
         ${lecDone > 0 ? `<small style="font-size:10px;opacity:0.8">(${lecDone}/${totalLec})</small>` : ''}
+        ${chBasketCount > 0 ? `<span style="background:${col};color:#000;border-radius:10px;padding:0 5px;font-size:10px;font-weight:900;">+${chBasketCount}</span>` : ''}
       </button>
     `);
   }
   if (chChipsContainer) chChipsContainer.innerHTML = chHtml.join('');
 
-  // 3. المحاضرات
+  // 3. المحاضرات مع دعم التحديد المتعدد والتفريد
   const totalLec = Number((currentSub.chapterLectures && currentSub.chapterLectures[svPickerSelectedChapter]) || currentSub.lecPerCh || 8);
-  const currentReached = Number((currentSub.lectureProgress && currentSub.lectureProgress[svPickerSelectedChapter]) || 0);
-  const recommendedLec = currentReached + 1 <= totalLec ? currentReached + 1 : totalLec;
+  const doneList = (currentSub.completedLectures && Array.isArray(currentSub.completedLectures[svPickerSelectedChapter]))
+    ? currentSub.completedLectures[svPickerSelectedChapter]
+    : (currentSub.lectureProgress && currentSub.lectureProgress[svPickerSelectedChapter]
+        ? Array.from({length: currentSub.lectureProgress[svPickerSelectedChapter]}, (_, i) => i + 1)
+        : []);
 
   if (svPickerSelectedLecture == null || svPickerSelectedLecture < 1) {
-    svPickerSelectedLecture = recommendedLec;
+    svPickerSelectedLecture = 1;
   }
   if (svPickerSelectedLecture > totalLec) {
     svPickerSelectedLecture = totalLec;
@@ -780,20 +832,23 @@ function renderSvPickerModalContent() {
   const lecHtml = [];
   const col = currentSub.color || '#38d9f5';
   for (let l = 1; l <= totalLec; l++) {
-    const isSel = l === svPickerSelectedLecture;
-    const isPast = l <= currentReached;
+    const inBasket = svPickerBasket.some(b => b.type === 'lecture' && b.subjectId === currentSub.id && Number(b.chapter) === Number(svPickerSelectedChapter) && Number(b.lecture) === l);
+    const isVaultDone = doneList.includes(l);
+    const isCur = l === svPickerSelectedLecture;
+
     lecHtml.push(`
-      <button type="button" class="sv-picker-lec-btn ${isSel ? 'selected' : ''} ${isPast ? 'past' : ''}"
-        style="${isSel ? `background:${col};border-color:${col};color:#000;font-weight:900` : ''}"
-        onclick="svPickerSelectLecture(${l})">
+      <button type="button" class="sv-picker-lec-btn ${inBasket ? 'in-basket selected' : ''} ${isVaultDone ? 'past' : ''}"
+        style="${inBasket ? `background:${col};border-color:${col};color:#000;font-weight:900;box-shadow:0 0 10px ${col}88;` : (isCur ? `border-color:${col};` : '')}"
+        onclick="svPickerToggleLecture('${currentSub.id}', ${svPickerSelectedChapter}, ${l})"
+        title="محاضرة ${l} ${isVaultDone ? '(منجزة في StudyVault)' : ''}">
         <span>${l}</span>
-        ${isPast && !isSel ? '<span class="sv-lec-check">✓</span>' : ''}
+        ${inBasket ? '<span class="sv-lec-check" style="position:absolute;top:2px;right:3px;font-size:10px;font-weight:900;color:#000;">✓</span>' : (isVaultDone ? '<span class="sv-lec-check" style="position:absolute;top:2px;right:3px;font-size:9px;color:var(--success);font-weight:900;" title="منجزة سابقا">✓</span>' : '')}
       </button>
     `);
   }
   if (lecGridContainer) lecGridContainer.innerHTML = lecHtml.join('');
 
-  // 4. الملازم والصفحات (لوضع الملازم)
+  // 4. الملازم والصفحات
   const materials = currentSub.materials || [];
   if (!svPickerSelectedMaterialId || !materials.some(m => m.id === svPickerSelectedMaterialId)) {
     svPickerSelectedMaterialId = materials.length > 0 ? materials[0].id : null;
@@ -809,12 +864,14 @@ function renderSvPickerModalContent() {
     } else {
       matChipsContainer.innerHTML = materials.map(m => {
         const isSel = m.id === svPickerSelectedMaterialId;
+        const matBasketCount = svPickerBasket.filter(b => b.type === 'material_pages' && b.materialId === m.id).length;
         return `
           <button type="button" class="sv-picker-chip ${isSel ? 'selected' : ''}"
             style="${isSel ? `background:${col}22;border-color:${col};color:${col}` : ''}"
             onclick="svPickerSelectMaterial('${m.id}')">
             <span>${m.type === 'book' ? '📕' : '📓'} ${typeof escapeHtml === 'function' ? escapeHtml(m.name) : m.name}</span>
             <small style="font-size:10px;opacity:0.8">(${m.currentPage || 0}/${m.totalPages || 0})</small>
+            ${matBasketCount > 0 ? `<span style="background:${col};color:#000;border-radius:10px;padding:0 5px;font-size:10px;font-weight:900;">+${matBasketCount}</span>` : ''}
           </button>
         `;
       }).join('');
@@ -853,6 +910,7 @@ function renderSvPickerModalContent() {
   }
 
   updateSvPickerPreview();
+  renderSvPickerBasket();
 }
 
 function svPickerSelectSubject(id) {
@@ -860,10 +918,6 @@ function svPickerSelectSubject(id) {
   const state = getStudyVaultState();
   const sub = (state.subjects || []).find(s => s.id === id);
   svPickerSelectedChapter = (sub && sub.currentChapter) || 1;
-  const totalLec = Number((sub && sub.chapterLectures && sub.chapterLectures[svPickerSelectedChapter]) || (sub && sub.lecPerCh) || 8);
-  const currentReached = Number((sub && sub.lectureProgress && sub.lectureProgress[svPickerSelectedChapter]) || 0);
-  svPickerSelectedLecture = currentReached + 1 <= totalLec ? currentReached + 1 : totalLec;
-
   const mats = (sub && sub.materials) || [];
   svPickerSelectedMaterialId = mats.length > 0 ? mats[0].id : null;
   if (mats.length > 0) {
@@ -873,23 +927,208 @@ function svPickerSelectSubject(id) {
     svPickerFromPage = curP + 1;
     svPickerToPage = svPickerTargetPage;
   }
-
   renderSvPickerModalContent();
 }
 
 function svPickerSelectChapter(c) {
   svPickerSelectedChapter = c;
-  const state = getStudyVaultState();
-  const sub = (state.subjects || []).find(s => s.id === svPickerSelectedSubjectId);
-  const totalLec = Number((sub && sub.chapterLectures && sub.chapterLectures[c]) || (sub && sub.lecPerCh) || 8);
-  const currentReached = Number((sub && sub.lectureProgress && sub.lectureProgress[c]) || 0);
-  svPickerSelectedLecture = currentReached + 1 <= totalLec ? currentReached + 1 : totalLec;
   renderSvPickerModalContent();
 }
 
 function svPickerSelectLecture(l) {
   svPickerSelectedLecture = l;
+  svPickerToggleLecture(svPickerSelectedSubjectId, svPickerSelectedChapter, l);
+}
+
+function svPickerToggleLecture(subId, ch, l) {
+  const state = getStudyVaultState();
+  const sub = (state.subjects || []).find(s => s.id === subId);
+  if (!sub) return;
+
+  svPickerSelectedLecture = l;
+  const existingIdx = svPickerBasket.findIndex(b => b.type === 'lecture' && b.subjectId === sub.id && Number(b.chapter) === Number(ch) && Number(b.lecture) === Number(l));
+
+  if (existingIdx !== -1) {
+    svPickerBasket.splice(existingIdx, 1);
+  } else {
+    svPickerBasket.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + l,
+      type: 'lecture',
+      subjectId: sub.id,
+      subjectName: sub.name,
+      chapter: Number(ch),
+      lecture: Number(l),
+      color: sub.color || '#38d9f5',
+      text: `${sub.name} — الفصل ${ch}: محاضرة ${l}`
+    });
+  }
+
   renderSvPickerModalContent();
+  renderSvPickerBasket();
+  updateSvPickerPreview();
+}
+
+function svPickerSelectRangeHelper(fromL, toL) {
+  const state = getStudyVaultState();
+  const sub = (state.subjects || []).find(s => s.id === svPickerSelectedSubjectId);
+  if (!sub) return;
+  const ch = Number(svPickerSelectedChapter);
+  const total = Number((sub.chapterLectures && sub.chapterLectures[ch]) || sub.lecPerCh || 8);
+
+  const start = Math.max(1, fromL);
+  const end = Math.min(total, toL);
+
+  for (let l = start; l <= end; l++) {
+    const exists = svPickerBasket.some(b => b.type === 'lecture' && b.subjectId === sub.id && Number(b.chapter) === ch && Number(b.lecture) === l);
+    if (!exists) {
+      svPickerBasket.push({
+        id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6) + l,
+        type: 'lecture',
+        subjectId: sub.id,
+        subjectName: sub.name,
+        chapter: ch,
+        lecture: l,
+        color: sub.color || '#38d9f5',
+        text: `${sub.name} — الفصل ${ch}: محاضرة ${l}`
+      });
+    }
+  }
+  renderSvPickerModalContent();
+  renderSvPickerBasket();
+  updateSvPickerPreview();
+  if (typeof toast === 'function') toast(`تمت إضافة المحاضرات (${start} إلى ${end}) للسلة ✓`, 'ok');
+}
+
+function svPickerPromptCustomRange() {
+  const state = getStudyVaultState();
+  const sub = (state.subjects || []).find(s => s.id === svPickerSelectedSubjectId);
+  if (!sub) return;
+  const ch = svPickerSelectedChapter;
+  const total = Number((sub.chapterLectures && sub.chapterLectures[ch]) || sub.lecPerCh || 8);
+
+  const fromVal = prompt(`تحديد مجال محاضرات الفصل ${ch}\nإجمالي محاضرات الفصل: ${total}\n\nابدأ من محاضرة رقم:`, '1');
+  if (fromVal === null) return;
+  const toVal = prompt(`إلى محاضرة رقم:`, '4');
+  if (toVal === null) return;
+
+  const f = parseInt(fromVal) || 1;
+  const t = parseInt(toVal) || f;
+  svPickerSelectRangeHelper(Math.min(f, t), Math.max(f, t));
+}
+
+function svPickerSelectAllChapterLectures() {
+  const state = getStudyVaultState();
+  const sub = (state.subjects || []).find(s => s.id === svPickerSelectedSubjectId);
+  if (!sub) return;
+  const ch = svPickerSelectedChapter;
+  const total = Number((sub.chapterLectures && sub.chapterLectures[ch]) || sub.lecPerCh || 8);
+  svPickerSelectRangeHelper(1, total);
+}
+
+function svPickerClearChapterLectures() {
+  const subId = svPickerSelectedSubjectId;
+  const ch = Number(svPickerSelectedChapter);
+  svPickerBasket = svPickerBasket.filter(b => !(b.type === 'lecture' && b.subjectId === subId && Number(b.chapter) === ch));
+  renderSvPickerModalContent();
+  renderSvPickerBasket();
+  updateSvPickerPreview();
+  if (typeof toast === 'function') toast('تم إلغاء تحديد محاضرات هذا الفصل من السلة', 'bad');
+}
+
+function svPickerAddCurrentMaterialToBasket() {
+  const state = getStudyVaultState();
+  const sub = (state.subjects || []).find(s => s.id === svPickerSelectedSubjectId);
+  if (!sub) return;
+  const materials = sub.materials || [];
+  const mat = materials.find(m => m.id === svPickerSelectedMaterialId) || materials[0];
+  if (!mat) {
+    if (typeof toast === 'function') toast('يرجى إضافة ملزمة للمادة أولاً', 'error');
+    return;
+  }
+
+  const curP = Number(mat.currentPage || 0);
+  let text = '';
+  let targetPage = svPickerTargetPage;
+  let fromPage = curP;
+
+  if (svPickerPagesSubMode === 'target') {
+    targetPage = Number(document.getElementById('sv-picker-target-page-input')?.value || svPickerTargetPage);
+    if (targetPage <= 0) targetPage = curP + 5;
+    const diff = Math.max(0, targetPage - curP);
+    text = `${sub.name} — ملزمة ${mat.name}: لحد ص ${targetPage}${diff > 0 ? ` (${diff} ص)` : ''}`;
+  } else {
+    fromPage = Number(document.getElementById('sv-picker-from-page-input')?.value || svPickerFromPage);
+    targetPage = Number(document.getElementById('sv-picker-to-page-input')?.value || svPickerToPage);
+    const count = Math.max(1, targetPage - fromPage + 1);
+    text = `${sub.name} — ملزمة ${mat.name}: ص ${fromPage} - ${targetPage} (${count} ص)`;
+  }
+
+  const exists = svPickerBasket.some(b => b.type === 'material_pages' && b.materialId === mat.id && b.targetPage === targetPage && b.fromPage === fromPage);
+  if (!exists) {
+    svPickerBasket.push({
+      id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+      type: 'material_pages',
+      subjectId: sub.id,
+      subjectName: sub.name,
+      materialId: mat.id,
+      materialName: mat.name,
+      targetPage: targetPage,
+      fromPage: fromPage,
+      prevPage: curP,
+      color: sub.color || '#38d9f5',
+      text: text
+    });
+    if (typeof toast === 'function') toast(`أضيفت الملزمة إلى سلة الأهداف (${mat.name}: ص ${targetPage}) ✓`, 'ok');
+  } else {
+    if (typeof toast === 'function') toast('هذا الهدف مضاف بالفعل في السلة', 'info');
+  }
+
+  renderSvPickerBasket();
+  updateSvPickerPreview();
+}
+
+function svPickerRemoveBasketItem(id) {
+  svPickerBasket = svPickerBasket.filter(b => b.id !== id);
+  renderSvPickerModalContent();
+  renderSvPickerBasket();
+  updateSvPickerPreview();
+}
+
+function svPickerClearBasket() {
+  svPickerBasket = [];
+  renderSvPickerModalContent();
+  renderSvPickerBasket();
+  updateSvPickerPreview();
+  if (typeof toast === 'function') toast('تم تفريغ سلة الأهداف', 'bad');
+}
+
+function renderSvPickerBasket() {
+  const basketCountEl = document.getElementById('sv-basket-count');
+  const basketItemsEl = document.getElementById('sv-basket-items');
+  const confirmBtnText = document.getElementById('btn-sv-picker-confirm-text');
+
+  if (basketCountEl) basketCountEl.textContent = svPickerBasket.length;
+
+  if (basketItemsEl) {
+    if (svPickerBasket.length === 0) {
+      basketItemsEl.innerHTML = `<span style="font-size:0.78rem;color:var(--text-muted);">انقر على المحاضرات أو أضف ملزمة لتجميع أهداف الجلسة معاً هنا.</span>`;
+    } else {
+      basketItemsEl.innerHTML = svPickerBasket.map(item => `
+        <div class="sv-basket-chip" style="display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:16px;background:${item.color}20;border:1px solid ${item.color}88;color:${item.color};font-size:0.78rem;font-weight:700;">
+          <span>${typeof escapeHtml === 'function' ? escapeHtml(item.text) : item.text}</span>
+          <button type="button" onclick="svPickerRemoveBasketItem('${item.id}')" style="background:none;border:none;color:${item.color};cursor:pointer;font-weight:900;font-size:0.85rem;padding:0 2px;" title="إزالة">✕</button>
+        </div>
+      `).join('');
+    }
+  }
+
+  if (confirmBtnText) {
+    if (svPickerBasket.length > 0) {
+      confirmBtnText.textContent = `إضافة ${svPickerBasket.length} أهداف دفعة واحدة للإنجازات 🚀`;
+    } else {
+      confirmBtnText.textContent = 'إضافة لإنجازات اليوم';
+    }
+  }
 }
 
 function svPickerSelectMaterial(mId) {
@@ -947,6 +1186,14 @@ function updateSvPickerPreview() {
   const previewText = document.getElementById('sv-picker-preview');
   if (!previewText) return;
 
+  if (svPickerBasket.length > 0) {
+    previewText.innerHTML = `
+      <span style="opacity:0.9">جاهز لإضافة:</span>
+      <b style="color:var(--primary);margin-inline-start:6px;">${svPickerBasket.length} أهداف محددة في السلة</b>
+    `;
+    return;
+  }
+
   const state = getStudyVaultState();
   const sub = (state.subjects || []).find(s => s.id === svPickerSelectedSubjectId);
   if (!sub) {
@@ -957,8 +1204,8 @@ function updateSvPickerPreview() {
 
   if (svPickerMode === 'lectures') {
     previewText.innerHTML = `
-      <span style="opacity:0.8">المحاضرة المختارة:</span>
-      <b style="color:${col};margin-inline-start:6px;">${escapeHtml(sub.name)} — الفصل ${svPickerSelectedChapter}: محاضرة ${svPickerSelectedLecture}</b>
+      <span style="opacity:0.8">المحاضرة المحددة:</span>
+      <b style="color:${col};margin-inline-start:6px;">${escapeHtml(sub.name)} — الفصل ${svPickerSelectedChapter}: محاضرة ${svPickerSelectedLecture || 1}</b>
     `;
   } else {
     const materials = sub.materials || [];
@@ -1017,8 +1264,53 @@ function svPickerQuickAddMaterialPrompt() {
   if (typeof toast === 'function') toast(`تمت إضافة الملزمة (${newMat.name}) بنجاح ✓`, 'ok');
 }
 
-// الزر الموحّد لتأكيد الإضافة لإنجازات اليوم
+// الزر الموحّد لتأكيد الإضافة لإنجازات اليوم (يدعم الدفعة والسلة والسحب الفردي)
 function confirmAddSvItemToAchievements() {
+  if (svPickerBasket.length > 0) {
+    if (typeof DATA !== 'undefined' && typeof currentDayKey === 'string') {
+      const day = ensureDay(DATA, currentDayKey);
+      let count = 0;
+      svPickerBasket.forEach(item => {
+        if (!day.achievements.some(a => a.text === item.text)) {
+          day.achievements.push({
+            id: uid(),
+            text: item.text,
+            done: false,
+            createdAt: new Date().toISOString(),
+            studyVaultRef: item.type === 'material_pages' ? {
+              type: 'material_pages',
+              subjectId: item.subjectId,
+              subjectName: item.subjectName,
+              materialId: item.materialId,
+              materialName: item.materialName,
+              targetPage: item.targetPage,
+              fromPage: item.fromPage,
+              prevPage: item.prevPage,
+              color: item.color
+            } : {
+              type: 'lecture',
+              subjectId: item.subjectId,
+              subjectName: item.subjectName,
+              chapter: item.chapter,
+              lecture: item.lecture,
+              color: item.color
+            }
+          });
+          count++;
+        }
+      });
+      persist();
+      renderAchievements();
+      renderStats();
+      if (typeof toast === 'function') toast(`تمت إضافة ${count} أهداف بنجاح دفعة واحدة إلى إنجازات اليوم! 👏`, 'ok');
+    }
+    svPickerBasket = [];
+    renderSvPickerBasket();
+    closeStudyVaultPicker();
+    return;
+  }
+
+  // إضافة فردية إذا كانت السلة فارغة
   if (svPickerMode === 'pages') {
     confirmAddSvMaterialToAchievements();
   } else {
@@ -1104,7 +1396,6 @@ function confirmAddSvLectureToAchievements() {
   const lec = svPickerSelectedLecture;
   const text = `${sub.name} — الفصل ${ch}: محاضرة ${lec}`;
 
-  // إضافة الإنجاز إلى اليوم الحالي في لوحة التحكم
   if (typeof DATA !== 'undefined' && typeof currentDayKey === 'string') {
     const day = ensureDay(DATA, currentDayKey);
     day.achievements.push({
@@ -1126,7 +1417,6 @@ function confirmAddSvLectureToAchievements() {
     renderStats();
     if (typeof toast === 'function') toast(`أضيفت المحاضرة لهدف اليوم: ${text}`, 'ok');
   } else {
-    // إذا استخدمت من مكان آخر، نملأ حقل الإدخال
     const input = document.getElementById('achieve-input');
     if (input) input.value = text;
   }

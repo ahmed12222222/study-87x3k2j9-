@@ -159,6 +159,10 @@ app.get('/focus-tracker', (req, res) => {
   res.sendFile(path.join(__dirname, 'focus-tracker.html'));
 });
 
+app.get('/studyvault', (req, res) => {
+  res.sendFile(path.join(__dirname, 'studyvault.html'));
+});
+
 app.get('/review', (req, res) => {
   res.sendFile(path.join(__dirname, 'review.html'));
 });

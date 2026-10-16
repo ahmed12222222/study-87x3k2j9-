@@ -624,19 +624,30 @@ input, select, textarea { font-family: inherit; outline: none; }
 
 .lec-btn:hover { border-color: var(--rim2); color: var(--text1); }
 
-.lec-btn.past {
-  background: color-mix(in srgb, var(--subject-color, var(--violet)) 10%, var(--ink2));
-  border-color: color-mix(in srgb, var(--subject-color, var(--violet)) 30%, transparent);
-  color: color-mix(in srgb, var(--subject-color, var(--violet)) 70%, white);
+.lec-btn.past,
+.lec-btn.done {
+  background: var(--subject-color, var(--violet));
+  border-color: var(--subject-color, var(--violet));
+  color: #fff;
+  box-shadow: 0 0 12px color-mix(in srgb, var(--subject-color, var(--violet)) 45%, transparent);
 }
 
 .lec-btn.current {
   background: var(--subject-color, var(--violet));
   border-color: var(--subject-color, var(--violet));
   color: #fff;
-  box-shadow: 0 0 14px color-mix(in srgb, var(--subject-color, var(--violet)) 50%, transparent);
+  box-shadow: 0 0 16px color-mix(in srgb, var(--subject-color, var(--violet)) 60%, transparent);
   transform: scale(1.08);
   z-index: 1;
+}
+
+.lec-btn .lec-check-badge {
+  position: absolute;
+  top: 2px;
+  left: 4px;
+  font-size: 9px;
+  font-weight: 900;
+  color: #fff;
 }
 
 .lec-count-edit {
@@ -1300,11 +1311,18 @@ input[type=range] {
           <div class="card-label" style="justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px">
             <span><span>🎯</span> محاضرات الفصل — <span id="lec-chapter-label">اختر فصلاً</span></span>
             <div class="lec-count-edit">
-              <label for="lec-count-input">عدد محاضرات هذا الفصل</label>
-              <input type="number" id="lec-count-input" min="1" max="60" onchange="updateChapterLecCount(this.value)">
+              <label for="lec-count-input">عدد محاضرات هذا الفصل (مفتوح بدون حد)</label>
+              <input type="number" id="lec-count-input" min="1" max="9999" placeholder="عدد مفتوح" onchange="updateChapterLecCount(this.value)">
             </div>
           </div>
-          <div id="lec-hint" style="font-size:12px;color:var(--text2)">انقر على المحاضرة الأخيرة التي وصلتها</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;margin-bottom:10px;background:var(--ink2);padding:8px 12px;border-radius:10px;border:1px solid var(--border);">
+            <div id="lec-hint" style="font-size:12px;color:var(--text1)">💡 <b>حرية القفز والتراكمات:</b> انقر على أي محاضرة لتحديدها كمنجزة أو إلغائها فوراً بدون إنجاز المحاضرات السابقة تلقائياً!</div>
+            <div style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button type="button" class="btn btn-sm btn-ghost" onclick="vaultSelectAllChapterLectures()" style="font-size:11.5px;padding:4px 9px;">✓ تحديد الكل</button>
+              <button type="button" class="btn btn-sm btn-ghost" onclick="vaultSelectLectureRangePrompt()" style="font-size:11.5px;padding:4px 9px;">📑 تحديد مجال (من-إلى)</button>
+              <button type="button" class="btn btn-sm btn-ghost" onclick="vaultClearChapterLectures()" style="font-size:11.5px;padding:4px 9px;color:var(--coral);">✕ إلغاء تحديد الفصل</button>
+            </div>
+          </div>
           <div id="lec-grid"></div>
         </div>
 
@@ -1416,7 +1434,7 @@ input[type=range] {
       <label class="form-label">عدد المحاضرات الافتراضي لكل فصل</label>
       <div class="chapters-row">
         <div class="chapters-num" id="lec-per-ch-display" style="border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 12px rgba(56,217,245,0.3)">8</div>
-        <input type="range" min="1" max="20" value="8" id="lec-per-ch-range"
+        <input type="range" min="1" max="250" value="8" id="lec-per-ch-range"
           oninput="document.getElementById('lec-per-ch-display').textContent=this.value">
       </div>
     </div>
@@ -1780,6 +1798,26 @@ function normalizeStudyVaultState(raw) {
         }
       }
 
+      // تطبيع completedLectures لدعم القفز بين المحاضرات وعدم إجبار الترتيب
+      const normCompletedLectures = {};
+      if (s.completedLectures && typeof s.completedLectures === 'object' && !Array.isArray(s.completedLectures)) {
+        Object.keys(s.completedLectures).forEach(k => {
+          if (Array.isArray(s.completedLectures[k])) {
+            normCompletedLectures[String(k)] = s.completedLectures[k].map(Number).filter(n => n > 0).sort((a,b) => a - b);
+          }
+        });
+      }
+      // إذا لم تكن completedLectures موجودة، نملأها من التقدم السابق
+      Object.keys(normProgress).forEach(k => {
+        if (!normCompletedLectures[k] && normProgress[k] > 0) {
+          normCompletedLectures[k] = Array.from({length: normProgress[k]}, (_, i) => i + 1);
+        }
+      });
+      // مزامنة عدد المحاضرات المنجزة في lectureProgress
+      Object.keys(normCompletedLectures).forEach(k => {
+        normProgress[k] = normCompletedLectures[k].length;
+      });
+
       // تطبيع chapterLectures
       const normChapterLectures = {};
       if (s.chapterLectures) {
@@ -1815,6 +1853,7 @@ function normalizeStudyVaultState(raw) {
         color: s.color || '#7b5ef8',
         instructor: s.instructor || '',
         currentChapter: Number(s.currentChapter) || 1,
+        completedLectures: normCompletedLectures,
         lectureProgress: normProgress,
         chapterLectures: normChapterLectures,
         materials: normMaterials,
@@ -2026,6 +2065,7 @@ function mkSubject({ name, chaptersCount=8, lecPerCh=8, color='#7b5ef8', instruc
     id: Date.now().toString(36) + Math.random().toString(36).slice(2,6),
     name, chaptersCount, lecPerCh, color, instructor,
     currentChapter: 1,
+    completedLectures: {},
     lectureProgress: {},
     chapterLectures: {},
     materials: [],
@@ -2056,18 +2096,34 @@ function subjectTotalLectures(sub) {
   return t;
 }
 
+function getChapterDoneCount(sub, c) {
+  if (!sub) return 0;
+  if (sub.completedLectures && Array.isArray(sub.completedLectures[c])) {
+    return sub.completedLectures[c].length;
+  }
+  return Number((sub.lectureProgress && sub.lectureProgress[c]) || 0);
+}
+
+function isLectureDone(sub, c, l) {
+  if (!sub) return false;
+  if (sub.completedLectures && Array.isArray(sub.completedLectures[c])) {
+    return sub.completedLectures[c].includes(Number(l));
+  }
+  return Number(l) <= Number((sub.lectureProgress && sub.lectureProgress[c]) || 0);
+}
+
 function totalDone(sub) {
   if (!sub) return 0;
-  const lp = sub.lectureProgress || {};
   let t = 0;
-  for (let c = 1; c <= (sub.chaptersCount || 8); c++) t += (lp[c] || 0);
+  for (let c = 1; c <= (sub.chaptersCount || 8); c++) {
+    t += getChapterDoneCount(sub, c);
+  }
   return t;
 }
 
 function currentLec(sub) {
   if (!sub) return 0;
-  const lp = sub.lectureProgress || {};
-  return lp[sub.currentChapter || 1] || 0;
+  return getChapterDoneCount(sub, sub.currentChapter || 1);
 }
 
 const WEEKDAYS_AR = ['أحد','اثنين','ثلاثاء','أربعاء','خميس','جمعة','سبت'];
@@ -2362,7 +2418,7 @@ function renderSubjectView() {
     chGrid.innerHTML = '';
     for (let c = 1; c <= sub.chaptersCount; c++) {
       const cLecTotal = chLec(sub, c);
-      const cDone = sub.lectureProgress[c] || 0;
+      const cDone = getChapterDoneCount(sub, c);
       const isDone = cDone >= cLecTotal && cLecTotal > 0;
       const isActive = c === currentCh;
 
@@ -2393,31 +2449,19 @@ function renderSubjectView() {
   const lecGrid = document.getElementById('lec-grid');
   if (lecGrid) {
     lecGrid.innerHTML = '';
+    const doneList = (sub.completedLectures && Array.isArray(sub.completedLectures[currentCh]))
+      ? sub.completedLectures[currentCh]
+      : [];
+
     for (let l = 1; l <= chLecTotal; l++) {
+      const isDone = doneList.includes(l);
       const btn = document.createElement('div');
-      btn.className = 'lec-btn';
-      if (l < curLecVal) {
-        btn.classList.add('past');
-      } else if (l === curLecVal) {
-        btn.classList.add('current');
-      }
-      btn.textContent = l;
+      btn.className = 'lec-btn' + (isDone ? ' done' : '');
+      btn.style.setProperty('--subject-color', sub.color || 'var(--violet)');
+      btn.innerHTML = `<span>${l}</span>${isDone ? '<span class="lec-check-badge">✓</span>' : ''}`;
+      btn.title = `محاضرة ${l} — انقر لتحديدها أو إلغائها بحرية`;
       btn.onclick = () => {
-        if (!sub.lectureProgress) sub.lectureProgress = {};
-        const prev = sub.lectureProgress[currentCh] || 0;
-        if (curLecVal === l) {
-          sub.lectureProgress[currentCh] = l - 1;
-        } else {
-          sub.lectureProgress[currentCh] = l;
-          if (l > prev) {
-            const added = [];
-            for (let k = prev + 1; k <= l; k++) added.push(k);
-            addLogEntries(todayStr(), sub.id, currentCh, added);
-            toast(`أحسنت! أكملت المحاضرة ${l} من الفصل ${currentCh} 👏`, 'ok');
-          }
-        }
-        saveState();
-        render();
+        toggleLectureDone(sub, currentCh, l);
       };
       lecGrid.appendChild(btn);
     }
@@ -2451,14 +2495,110 @@ function renderSubjectView() {
   }
 }
 
+function toggleLectureDone(sub, ch, l) {
+  if (!sub.completedLectures) sub.completedLectures = {};
+  if (!Array.isArray(sub.completedLectures[ch])) {
+    const prevCount = (sub.lectureProgress && sub.lectureProgress[ch]) || 0;
+    sub.completedLectures[ch] = prevCount > 0 ? Array.from({length: prevCount}, (_, i) => i + 1) : [];
+  }
+
+  const lNum = Number(l);
+  const idx = sub.completedLectures[ch].indexOf(lNum);
+  const isNowDone = idx === -1;
+  const today = todayStr();
+
+  if (isNowDone) {
+    sub.completedLectures[ch].push(lNum);
+    sub.completedLectures[ch].sort((a, b) => a - b);
+    addLogEntries(today, sub.id, ch, [lNum]);
+    toast(`أحسنت! أكملت المحاضرة ${lNum} من الفصل ${ch} 👏`, 'ok');
+  } else {
+    sub.completedLectures[ch].splice(idx, 1);
+    STATE.studyLog = (STATE.studyLog || []).filter(en =>
+      !(en.date === today && en.subjectId === sub.id && Number(en.chapterNum) === Number(ch) && Number(en.lectureNum) === lNum)
+    );
+    toast(`تم إلغاء إكمال المحاضرة ${lNum}`, 'bad');
+  }
+
+  if (!sub.lectureProgress) sub.lectureProgress = {};
+  sub.lectureProgress[ch] = sub.completedLectures[ch].length;
+
+  saveState();
+  render();
+}
+
+function vaultSelectAllChapterLectures() {
+  const sub = getSub(activeId);
+  if (!sub) return;
+  const ch = sub.currentChapter || 1;
+  const total = chLec(sub, ch);
+  if (!sub.completedLectures) sub.completedLectures = {};
+  sub.completedLectures[ch] = Array.from({length: total}, (_, i) => i + 1);
+  if (!sub.lectureProgress) sub.lectureProgress = {};
+  sub.lectureProgress[ch] = total;
+  saveState();
+  render();
+  toast(`تم تحديد جميع محاضرات الفصل ${ch} كمنجزة ✓`, 'ok');
+}
+
+function vaultClearChapterLectures() {
+  const sub = getSub(activeId);
+  if (!sub) return;
+  const ch = sub.currentChapter || 1;
+  if (!sub.completedLectures) sub.completedLectures = {};
+  sub.completedLectures[ch] = [];
+  if (!sub.lectureProgress) sub.lectureProgress = {};
+  sub.lectureProgress[ch] = 0;
+  saveState();
+  render();
+  toast(`تم إلغاء تحديد محاضرات الفصل ${ch}`, 'bad');
+}
+
+function vaultSelectLectureRangePrompt() {
+  const sub = getSub(activeId);
+  if (!sub) return;
+  const ch = sub.currentChapter || 1;
+  const total = chLec(sub, ch);
+  const fromStr = prompt(`تحديد مجال محاضرات الفصل ${ch}\nإجمالي محاضرات الفصل: ${total}\n\nابدأ من محاضرة رقم:`, '1');
+  if (fromStr === null) return;
+  const toStr = prompt(`إلى محاضرة رقم:`, String(Math.min(total, 10)));
+  if (toStr === null) return;
+
+  const fromL = Math.max(1, parseInt(fromStr) || 1);
+  const toL = Math.min(total, Math.max(fromL, parseInt(toStr) || fromL));
+
+  if (!sub.completedLectures) sub.completedLectures = {};
+  if (!Array.isArray(sub.completedLectures[ch])) sub.completedLectures[ch] = [];
+
+  const added = [];
+  const today = todayStr();
+  for (let l = fromL; l <= toL; l++) {
+    if (!sub.completedLectures[ch].includes(l)) {
+      sub.completedLectures[ch].push(l);
+      added.push(l);
+    }
+  }
+  sub.completedLectures[ch].sort((a, b) => a - b);
+  if (!sub.lectureProgress) sub.lectureProgress = {};
+  sub.lectureProgress[ch] = sub.completedLectures[ch].length;
+
+  if (added.length > 0) {
+    addLogEntries(today, sub.id, ch, added);
+  }
+  saveState();
+  render();
+  toast(`تم تحديد المحاضرات من ${fromL} إلى ${toL} كمنجزة بنجاح ✓`, 'ok');
+}
+
 function updateChapterLecCount(val) {
   const sub = getSub(activeId);
   if (!sub) return;
-  const num = Math.max(1, Math.min(60, parseInt(val) || 1));
+  const num = Math.max(1, parseInt(val) || 1);
   if (!sub.chapterLectures) sub.chapterLectures = {};
   sub.chapterLectures[sub.currentChapter] = num;
   saveState();
   renderSubjectView();
+  toast(`تم تحديث عدد محاضرات الفصل إلى ${num} محاضرة ✓`, 'ok');
 }
 
 function renderMaterials(sub) {
@@ -3144,10 +3284,20 @@ function confirmLogEntry() {
 
   const sub = getSub(manualLogSubjectId);
   if (sub) {
-    const maxLec = Math.max(...manualLogLectures);
-    if ((sub.lectureProgress[manualLogChapter] || 0) < maxLec) {
-      sub.lectureProgress[manualLogChapter] = maxLec;
+    if (!sub.completedLectures) sub.completedLectures = {};
+    if (!Array.isArray(sub.completedLectures[manualLogChapter])) {
+      const prevCount = (sub.lectureProgress && sub.lectureProgress[manualLogChapter]) || 0;
+      sub.completedLectures[manualLogChapter] = prevCount > 0 ? Array.from({length: prevCount}, (_, i) => i + 1) : [];
     }
+    manualLogLectures.forEach(l => {
+      const lNum = Number(l);
+      if (!sub.completedLectures[manualLogChapter].includes(lNum)) {
+        sub.completedLectures[manualLogChapter].push(lNum);
+      }
+    });
+    sub.completedLectures[manualLogChapter].sort((a, b) => a - b);
+    if (!sub.lectureProgress) sub.lectureProgress = {};
+    sub.lectureProgress[manualLogChapter] = sub.completedLectures[manualLogChapter].length;
   }
 
   saveState();
